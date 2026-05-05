@@ -11,6 +11,8 @@ import cookieParser from 'cookie-parser';
 
 import { env } from './config/env';
 import { connectDB, disconnectDB } from './config/db';
+import { seedAdminUser } from './config/seed';
+import routes from './routes';
 import { notFoundHandler, errorHandler } from './middleware/error.middleware';
 
 const app = express();
@@ -29,11 +31,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ─── Health check ─────────────────────────────────────────────────────────────
+// ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', env: env.NODE_ENV });
 });
+
+app.use('/api', routes);
 
 // ─── Error handling ───────────────────────────────────────────────────────────
 
@@ -44,6 +48,7 @@ app.use(errorHandler);
 
 async function bootstrap(): Promise<void> {
   await connectDB();
+  await seedAdminUser();
 
   const server = app.listen(env.PORT, () => {
     console.log(`\n🚀  Evoke Sync API running on http://localhost:${env.PORT}`);
