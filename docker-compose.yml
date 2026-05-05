@@ -1,0 +1,47 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: evoke-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - evoke-net
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: evoke-server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file: .env
+    depends_on:
+      - mongo
+    networks:
+      - evoke-net
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    container_name: evoke-client
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+    networks:
+      - evoke-net
+
+volumes:
+  mongo_data:
+
+networks:
+  evoke-net:
+    driver: bridge
