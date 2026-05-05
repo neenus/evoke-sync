@@ -10,6 +10,7 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 
 import { env } from './config/env';
+import { connectDB, disconnectDB } from './config/db';
 import { notFoundHandler, errorHandler } from './middleware/error.middleware';
 
 const app = express();
@@ -42,14 +43,20 @@ app.use(errorHandler);
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 async function bootstrap(): Promise<void> {
+  await connectDB();
+
   const server = app.listen(env.PORT, () => {
     console.log(`\n🚀  Evoke Sync API running on http://localhost:${env.PORT}`);
-    console.log(`📋  Environment: ${env.NODE_ENV}\n`);
+    console.log(`📋  Environment: ${env.NODE_ENV}`);
+    console.log(`🔗  QBO environment: ${env.QBO_ENVIRONMENT}\n`);
   });
 
   const shutdown = async (signal: string) => {
     console.log(`\n${signal} received — shutting down gracefully...`);
-    server.close(() => process.exit(0));
+    server.close(async () => {
+      await disconnectDB();
+      process.exit(0);
+    });
   };
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
