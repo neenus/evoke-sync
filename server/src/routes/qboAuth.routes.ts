@@ -3,6 +3,7 @@ import { asyncHandler } from '../middleware/async.middleware';
 import { createError } from '../middleware/error.middleware';
 import { requireAuth } from '../middleware/auth.middleware';
 import { oauthService } from '../services/oauth.service';
+import { qboService } from '../services/qbo.service';
 import { QBOToken } from '../models/QBOToken.model';
 import { env } from '../config/env';
 import { AuthenticatedRequest, Company } from '../types';
@@ -16,7 +17,6 @@ function isValidCompany(c: string): c is Company {
 }
 
 // ─── GET /api/auth/qbo/connect/:company ───────────────────────────────────────
-// Redirect browser to QBO authorization page. company encoded in state param.
 
 router.get(
   '/connect/:company',
@@ -33,7 +33,7 @@ router.get(
 );
 
 // ─── GET /api/auth/qbo/callback ───────────────────────────────────────────────
-// QBO redirects here after user approves. Exchanges code for tokens.
+// QBO redirects here after user approval. Exchanges code, fetches real company name.
 
 router.get(
   '/callback',
@@ -44,7 +44,15 @@ router.get(
 
     const tokenDoc = await oauthService.exchangeCodeForTokens(fullUrl);
 
-    // Redirect to frontend Settings page with success indicator
+    // Enrich with the real company name from QBO — non-fatal if it fails
+    try {
+      const companyInfo = await qboService.getCompanyInfo(tokenDoc);
+      tokenDoc.companyName = companyInfo.CompanyName;
+      await tokenDoc.save();
+    } catch {
+      console.warn(`Could not fetch company info for ${tokenDoc.company} — using realmId as name`);
+    }
+
     res.redirect(`${env.APP_URL}/settings?qbo_connected=${tokenDoc.company}`);
   }),
 );
@@ -89,9 +97,7 @@ router.post(
   requireAuth,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { company } = req.params;
-    if (!isValidCompany(company)) {
-      throw createError('Invalid company', 400);
-    }
+    if (!isValidCompany(company)) throw createError('Invalid company', 400);
 
     const deleted = await QBOToken.findOneAndDelete({ company });
     if (!deleted) throw createError(`No QBO connection found for ${company}`, 404);
