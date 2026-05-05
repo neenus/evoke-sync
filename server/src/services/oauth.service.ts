@@ -78,7 +78,7 @@ class OAuthService {
     const doc = new QBOToken({
       company,
       companyId: realmId,
-      companyName: company === 'york_region' ? 'Evoke York Region' : 'Evoke Consulting',
+      companyName: realmId, // overwritten with real QBO company name after exchange
       environment: env.QBO_ENVIRONMENT,
       tokenData: { ...tokenData, createdAt: Date.now() },
       accessTokenExpiry: new Date(Date.now() + (tokenData.expires_in - 60) * 1000),
