@@ -31,6 +31,16 @@ export function History() {
     window.open(`/api/reconciliation/${id}/export`, '_blank');
   }
 
+  async function handleDelete(id: string, period: string) {
+    if (!window.confirm(`Delete reconciliation for ${period}? This cannot be undone.`)) return;
+    try {
+      await axios.delete(`/api/reconciliation/${id}`, { withCredentials: true });
+      setItems((prev) => prev.filter((item) => item._id !== id));
+    } catch {
+      alert('Failed to delete. Please try again.');
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Reconciliation History</h1>
@@ -100,12 +110,20 @@ export function History() {
                     {item.approvedAt ? new Date(item.approvedAt).toLocaleDateString('en-CA') : '—'}
                   </td>
                   <td className="px-5 py-3">
-                    <button
-                      onClick={() => downloadExport(item._id)}
-                      className="text-xs text-blue-600 hover:text-blue-800"
-                    >
-                      Download ↓
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => downloadExport(item._id)}
+                        className="text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        Download ↓
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item._id, formatMonth(item.month, item.year))}
+                        className="text-xs text-red-500 hover:text-red-700"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

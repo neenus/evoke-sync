@@ -27,6 +27,9 @@ const ACTION_LABEL: Record<string, string> = {
 export function ReconciliationRow({ invoice, reconciliationId, readOnly, onUpdate }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>(invoice.sessionGroups);
+  const [rawDates, setRawDates] = useState<string[]>(() =>
+    invoice.sessionGroups.map((sg) => sg.sessionDates.join(', ')),
+  );
   const [saving, setSaving] = useState(false);
 
   const save = useCallback(
@@ -41,6 +44,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, onUpdat
         );
         onUpdate(data.data.invoice);
         setSessionGroups(data.data.invoice.sessionGroups);
+        setRawDates(data.data.invoice.sessionGroups.map((sg) => sg.sessionDates.join(', ')));
       } catch (err) {
         console.error('Save failed', err);
       } finally {
@@ -61,17 +65,24 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, onUpdat
   async function addGroup() {
     const updated = [...sessionGroups, { sessionLength: 60, sessionDates: [], qboDescription: '' }];
     setSessionGroups(updated);
+    setRawDates((prev) => [...prev, '']);
   }
 
   async function removeGroup(idx: number) {
     const updated = sessionGroups.filter((_, i) => i !== idx);
+    setRawDates((prev) => prev.filter((_, i) => i !== idx));
     await save(updated);
   }
 
-  function handleDatesChange(idx: number, raw: string) {
-    // Parse comma-separated day numbers
+  function handleDatesRawChange(idx: number, value: string) {
+    setRawDates((prev) => prev.map((r, i) => (i === idx ? value : r)));
+  }
+
+  function handleDatesBlur(idx: number) {
+    const raw = rawDates[idx] ?? '';
     const dates = raw.split(/[,\s]+/).map((d) => d.trim()).filter((d) => /^\d+$/.test(d));
-    updateGroup(idx, 'sessionDates', dates);
+    const updated = updateGroup(idx, 'sessionDates', dates);
+    save(updated);
   }
 
   const actionStyle = ACTION_STYLE[invoice.action] ?? ACTION_STYLE.awaiting_data;
@@ -125,24 +136,29 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, onUpdat
               <div key={i} className="bg-gray-50 rounded-lg p-3 space-y-2">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-500">Session Length (min)</label>
-                    <input
-                      type="number"
+                    <label className="text-xs text-gray-500">Session Length</label>
+                    <select
                       value={sg.sessionLength}
                       disabled={readOnly}
-                      onChange={(e) => updateGroup(i, 'sessionLength', parseInt(e.target.value) || 0)}
-                      onBlur={() => save(sessionGroups)}
+                      onChange={(e) => {
+                        const updated = updateGroup(i, 'sessionLength', parseInt(e.target.value));
+                        save(updated);
+                      }}
                       className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
-                    />
+                    >
+                      {[15, 30, 60, 90].map((min) => (
+                        <option key={min} value={min}>{min} min</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="text-xs text-gray-500">Dates (day numbers, comma-separated)</label>
                     <input
                       type="text"
-                      value={sg.sessionDates.join(', ')}
+                      value={rawDates[i] ?? ''}
                       disabled={readOnly}
-                      onChange={(e) => handleDatesChange(i, e.target.value)}
-                      onBlur={() => save(sessionGroups)}
+                      onChange={(e) => handleDatesRawChange(i, e.target.value)}
+                      onBlur={() => handleDatesBlur(i)}
                       className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
                       placeholder="3, 8, 10, 24"
                     />

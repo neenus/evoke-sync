@@ -219,6 +219,18 @@ router.patch(
   }),
 );
 
+// ─── DELETE /api/reconciliation/:id ──────────────────────────────────────────
+
+router.delete(
+  '/:id',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const doc = await ReconciliationMonth.findById(req.params.id);
+    if (!doc) throw createError('Reconciliation not found', 404);
+    await doc.deleteOne();
+    res.json({ success: true });
+  }),
+);
+
 // ─── GET /api/reconciliation/:id/export ──────────────────────────────────────
 
 router.get(

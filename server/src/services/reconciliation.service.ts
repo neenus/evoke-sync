@@ -14,7 +14,7 @@ export function recalcInvoice(input: RecalcInput): void {
 
   invoice.sessionGroups = sessionGroups.map((sg) => ({
     sessionLength: sg.sessionLength,
-    sessionDates: [...new Set(sg.sessionDates)].sort((a, b) => parseInt(a) - parseInt(b)),
+    sessionDates: [...sg.sessionDates].sort((a, b) => parseInt(a) - parseInt(b)),
     qboDescription: invoice.isInsurance
       ? generateDescription({
           serviceType: invoice.serviceType,

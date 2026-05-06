@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { ProgressBar } from '../components/shared/ProgressBar';
 import { MonthSelector } from '../components/reconciliation/MonthSelector';
@@ -14,11 +14,31 @@ const STEPS = ['Setup', 'Billing Notes', 'Upload', 'Reconcile', 'Approve'];
 
 export function Reconciliation() {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isResume = Boolean(id);
+
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({ month: 'March', year: String(new Date().getFullYear()), company: 'york_region' });
   const [pulling, setPulling] = useState(false);
   const [pullError, setPullError] = useState('');
   const [reconciliation, setReconciliation] = useState<ReconciliationMonth | null>(null);
+  const [loadingExisting, setLoadingExisting] = useState(isResume);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoadingExisting(true);
+    axios.get<{ success: boolean; data: { reconciliation: ReconciliationMonth } }>(
+      `/api/reconciliation/${id}`,
+      { withCredentials: true },
+    )
+      .then(({ data }) => {
+        const rec = data.data.reconciliation;
+        setReconciliation(rec);
+        setStep(rec.status === 'approved' ? 4 : 3);
+      })
+      .catch(() => setPullError('Failed to load reconciliation. It may have been deleted.'))
+      .finally(() => setLoadingExisting(false));
+  }, [id]);
 
   function handleFormChange(field: 'month' | 'year' | 'company', value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -99,6 +119,14 @@ export function Reconciliation() {
       }, {})
     : {};
 
+  if (loadingExisting) {
+    return (
+      <div className="max-w-5xl mx-auto py-8 px-4">
+        <p className="text-gray-500 text-sm">Loading reconciliation…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 space-y-8">
       <h1 className="text-2xl font-bold text-gray-900">Month-End Reconciliation</h1>
@@ -136,13 +164,20 @@ export function Reconciliation() {
             onBlur={handleSaveNotes}
             readOnly={isApproved}
           />
-          <div className="flex justify-end">
-            <button
-              onClick={() => setStep(2)}
-              className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-            >
-              Next: Upload Invoices →
-            </button>
+          <div className="flex justify-between">
+            {!isResume && (
+              <button onClick={() => setStep(0)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
+                ← Back
+              </button>
+            )}
+            <div className="ml-auto">
+              <button
+                onClick={() => setStep(2)}
+                className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+              >
+                Next: Upload Invoices →
+              </button>
+            </div>
           </div>
         </div>
       )}
