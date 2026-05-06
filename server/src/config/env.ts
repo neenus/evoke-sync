@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  HOST: z.string().default('0.0.0.0'),
+  HOST: z.string().default('0.0.0.0'), // 0.0.0.0 = all interfaces; localhost also reachable for QBO OAuth callback
   PORT: z.string().default('5000').transform(Number),
   APP_URL: z.string().url().default('http://your-server-ip:3000'),
 
