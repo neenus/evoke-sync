@@ -34,3 +34,6 @@ mongo_data/
 
 # Uploads (runtime)
 server/uploads/
+
+# Sample files (real practitioner data — do not commit)
+sample_practitioner_files/
