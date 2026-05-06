@@ -6,7 +6,9 @@ import { requireAuth } from '../middleware/auth.middleware';
 import { ReconciliationMonth } from '../models/ReconciliationMonth.model';
 import { QBOToken } from '../models/QBOToken.model';
 import { qboService } from '../services/qbo.service';
-import { AuthenticatedRequest, Company } from '../types';
+import { recalcInvoice } from '../services/reconciliation.service';
+import { env } from '../config/env';
+import { AuthenticatedRequest, Company, SessionGroup } from '../types';
 
 const router = Router();
 
@@ -20,6 +22,16 @@ const startSchema = z.object({
 
 const notesSchema = z.object({
   billingNotesHtml: z.string(),
+});
+
+const invoiceUpdateSchema = z.object({
+  sessionGroups: z.array(
+    z.object({
+      sessionLength: z.number(),
+      sessionDates: z.array(z.string()),
+    }),
+  ),
+  notes: z.string().optional(),
 });
 
 function isApproved(status: string): boolean {
@@ -112,6 +124,37 @@ router.patch(
     await doc.save();
 
     res.json({ success: true, data: { billingNotesHtml: doc.billingNotesHtml } });
+  }),
+);
+
+// ─── PATCH /api/reconciliation/:id/invoice/:invoiceNo ─────────────────────────
+
+router.patch(
+  '/:id/invoice/:invoiceNo',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const doc = await ReconciliationMonth.findById(req.params.id);
+    if (!doc) throw createError('Reconciliation not found', 404);
+    if (isApproved(doc.status)) throw createError('Approved reconciliations are locked', 403);
+
+    const result = invoiceUpdateSchema.safeParse(req.body);
+    if (!result.success) throw createError(result.error.errors[0].message, 400);
+
+    const invoice = doc.invoices.find((inv) => inv.invoiceNo === req.params.invoiceNo);
+    if (!invoice) throw createError(`Invoice ${req.params.invoiceNo} not found`, 404);
+
+    const { sessionGroups, notes } = result.data;
+
+    if (notes !== undefined) invoice.notes = notes;
+
+    recalcInvoice({
+      invoice,
+      sessionGroups: sessionGroups as SessionGroup[],
+      supervisorDetails: env.DEFAULT_SUPERVISOR,
+      month: doc.month,
+    });
+
+    await doc.save();
+    res.json({ success: true, data: { invoice } });
   }),
 );
 
