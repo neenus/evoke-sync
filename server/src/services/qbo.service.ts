@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios from 'axios';
 import { env } from '../config/env';
 import { IQBOTokenDocument } from '../models/QBOToken.model';
 import { oauthService } from './oauth.service';
@@ -41,23 +41,62 @@ class QBOService {
     return `${baseUrl}/v3/company/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=${MINOR_VERSION}`;
   }
 
-  private async createHttpClient(tokenDoc: IQBOTokenDocument): Promise<AxiosInstance> {
+  private async qboGet<T>(tokenDoc: IQBOTokenDocument, url: string): Promise<T> {
+    const attempt = async (token: string) => {
+      const http = axios.create({
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        timeout: 30_000,
+      });
+      return http.get<T>(url);
+    };
+
     const accessToken = await oauthService.getValidAccessToken(tokenDoc);
-    return axios.create({
-      baseURL: this.baseUrl(tokenDoc),
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      timeout: 30_000,
-    });
+
+    console.log(`[QBO] GET ${url.replace(/access_token=[^&]+/, 'access_token=***')}`);
+    console.log(`[QBO] company=${tokenDoc.company} realmId=${tokenDoc.companyId} env=${tokenDoc.environment}`);
+
+    try {
+      const { data } = await attempt(accessToken);
+      return data;
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        console.error(
+          `[QBO] ${err.response?.status} for ${tokenDoc.company} — URL: ${url}`,
+          `\nQBO error body: ${JSON.stringify(err.response?.data, null, 2)}`,
+        );
+        if (err.response?.status === 401) {
+          try {
+            console.log(`[QBO] attempting token refresh for ${tokenDoc.company}...`);
+            const refreshed = await oauthService.refreshTokens(tokenDoc);
+            console.log(`[QBO] refresh succeeded — new expiry: ${refreshed.accessTokenExpiry}`);
+            const { data } = await attempt(refreshed.tokenData.access_token);
+            return data;
+          } catch (retryErr) {
+            if (axios.isAxiosError(retryErr)) {
+              console.error(
+                `[QBO] ${retryErr.response?.status} after refresh for ${tokenDoc.company}.`,
+                `\nQBO error body: ${JSON.stringify(retryErr.response?.data, null, 2)}`,
+              );
+            } else {
+              console.error(`[QBO] refresh failed for ${tokenDoc.company}:`, retryErr);
+            }
+            throw new Error(
+              `QBO token for "${tokenDoc.company}" is invalid — disconnect and reconnect in Settings.`,
+            );
+          }
+        }
+      }
+      throw err;
+    }
   }
 
   async getCompanyInfo(tokenDoc: IQBOTokenDocument): Promise<QBOCompanyInfo> {
-    const http = await this.createHttpClient(tokenDoc);
     const url = `${this.baseUrl(tokenDoc)}/v3/company/${tokenDoc.companyId}/companyinfo/${tokenDoc.companyId}?minorversion=${MINOR_VERSION}`;
-    const { data } = await http.get<{ CompanyInfo: QBOCompanyInfo }>(url);
+    const data = await this.qboGet<{ CompanyInfo: QBOCompanyInfo }>(tokenDoc, url);
     return data.CompanyInfo;
   }
 
@@ -68,8 +107,6 @@ class QBOService {
     month: string,
     year: string,
   ): Promise<InvoiceRow[]> {
-    const http = await this.createHttpClient(tokenDoc);
-
     const monthIndex = new Date(`${month} 1, ${year}`).getMonth() + 1;
     const paddedMonth = String(monthIndex).padStart(2, '0');
     const startDate = `${year}-${paddedMonth}-01`;
@@ -79,7 +116,7 @@ class QBOService {
     const query = `SELECT * FROM Invoice WHERE TxnDate >= '${startDate}' AND TxnDate <= '${endDate}' MAXRESULTS 1000`;
     const url = this.buildQueryUrl(tokenDoc.companyId, this.baseUrl(tokenDoc), query);
 
-    const { data } = await http.get<QBOQueryResponse<QBOInvoice>>(url);
+    const data = await this.qboGet<QBOQueryResponse<QBOInvoice>>(tokenDoc, url);
     const invoices = (data.QueryResponse['Invoice'] as QBOInvoice[]) ?? [];
 
     return invoices.map((inv) => this.normalizeInvoice(inv));
@@ -89,11 +126,10 @@ class QBOService {
     tokenDoc: IQBOTokenDocument,
     invoiceNo: string,
   ): Promise<InvoiceRow | null> {
-    const http = await this.createHttpClient(tokenDoc);
     const query = `SELECT * FROM Invoice WHERE DocNumber = '${invoiceNo}'`;
     const url = this.buildQueryUrl(tokenDoc.companyId, this.baseUrl(tokenDoc), query);
 
-    const { data } = await http.get<QBOQueryResponse<QBOInvoice>>(url);
+    const data = await this.qboGet<QBOQueryResponse<QBOInvoice>>(tokenDoc, url);
     const invoices = (data.QueryResponse['Invoice'] as QBOInvoice[]) ?? [];
 
     return invoices[0] ? this.normalizeInvoice(invoices[0]) : null;

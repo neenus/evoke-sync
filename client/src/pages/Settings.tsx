@@ -27,8 +27,12 @@ export function Settings() {
     ).then(({ data }) => setQboStatus(data.data)).catch(() => null);
   }, [searchParams]);
 
-  function connectCompany(company: string) {
-    window.location.href = `/api/auth/qbo/connect/${company}`;
+  async function connectCompany(company: string) {
+    const { data } = await axios.get<{ success: boolean; data: { authUrl: string } }>(
+      `/api/auth/qbo/connect/${company}`,
+      { withCredentials: true },
+    );
+    window.location.href = data.data.authUrl;
   }
 
   async function disconnectCompany(company: string) {

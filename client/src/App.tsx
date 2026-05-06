@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { PrivateRoute } from './components/shared/PrivateRoute';
 import { Navbar } from './components/layout/Navbar';
 import { Login } from './pages/Login';
+import { Callback } from './pages/Callback';
 import { Dashboard } from './pages/Dashboard';
 import { Reconciliation } from './pages/Reconciliation';
 import { History } from './pages/History';
@@ -32,6 +33,7 @@ export default function App() {
               </PrivateRoute>
             }
           >
+            <Route path="/callback" element={<Callback />} />
             <Route path="/" element={<Dashboard />} />
             <Route path="/reconciliation" element={<Reconciliation />} />
             <Route path="/history" element={<History />} />
