@@ -7,6 +7,7 @@ import { ReconciliationMonth } from '../models/ReconciliationMonth.model';
 import { QBOToken } from '../models/QBOToken.model';
 import { qboService } from '../services/qbo.service';
 import { recalcInvoice } from '../services/reconciliation.service';
+import { ApprovalRecord } from '../models/ApprovalRecord.model';
 import { env } from '../config/env';
 import { AuthenticatedRequest, Company, SessionGroup } from '../types';
 
@@ -22,6 +23,11 @@ const startSchema = z.object({
 
 const notesSchema = z.object({
   billingNotesHtml: z.string(),
+});
+
+const approveSchema = z.object({
+  approvedBy: z.string().min(1),
+  notes: z.string().optional(),
 });
 
 const invoiceUpdateSchema = z.object({
@@ -124,6 +130,60 @@ router.patch(
     await doc.save();
 
     res.json({ success: true, data: { billingNotesHtml: doc.billingNotesHtml } });
+  }),
+);
+
+// ─── POST /api/reconciliation/:id/approve ────────────────────────────────────
+
+router.post(
+  '/:id/approve',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const doc = await ReconciliationMonth.findById(req.params.id);
+    if (!doc) throw createError('Reconciliation not found', 404);
+    if (isApproved(doc.status)) throw createError('Already approved', 409);
+
+    const result = approveSchema.safeParse(req.body);
+    if (!result.success) throw createError(result.error.errors[0].message, 400);
+
+    // Guard: reject if any invoices are awaiting data
+    const awaitingCount = doc.invoices.filter((inv) => inv.action === 'awaiting_data').length;
+    if (awaitingCount > 0) {
+      throw createError(
+        `Cannot approve: ${awaitingCount} invoice${awaitingCount > 1 ? 's' : ''} still awaiting session data`,
+        422,
+      );
+    }
+
+    const { approvedBy, notes } = result.data;
+    const approvedAt = new Date();
+
+    // Lock the reconciliation
+    doc.status = 'approved';
+    doc.approvedBy = approvedBy;
+    doc.approvedAt = approvedAt;
+    await doc.save();
+
+    // Build approval record
+    const totalBilled = doc.invoices.reduce((s, inv) => s + inv.amountBilled, 0);
+    const totalActual = doc.invoices.reduce((s, inv) => s + inv.actualAmount, 0);
+    const totalDelta = Math.round((totalActual - totalBilled) * 100) / 100;
+
+    const record = await ApprovalRecord.create({
+      reconciliationMonthId: doc._id,
+      approvedBy,
+      approvedAt,
+      totalBilled: Math.round(totalBilled * 100) / 100,
+      totalActual: Math.round(totalActual * 100) / 100,
+      totalDelta,
+      actionsRequired: {
+        additionalCharges: doc.invoices.filter((i) => i.action === 'additional_charge').length,
+        creditMemos: doc.invoices.filter((i) => i.action === 'credit_memo').length,
+        noChange: doc.invoices.filter((i) => i.action === 'no_change').length,
+      },
+      notes: notes ?? '',
+    });
+
+    res.status(201).json({ success: true, data: { approval: record } });
   }),
 );
 
