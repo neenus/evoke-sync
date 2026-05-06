@@ -8,6 +8,7 @@ import { QBOToken } from '../models/QBOToken.model';
 import { qboService } from '../services/qbo.service';
 import { recalcInvoice } from '../services/reconciliation.service';
 import { ApprovalRecord } from '../models/ApprovalRecord.model';
+import { generateReconciliationExcel } from '../services/excelExport.service';
 import { env } from '../config/env';
 import { AuthenticatedRequest, Company, SessionGroup } from '../types';
 
@@ -215,6 +216,23 @@ router.patch(
 
     await doc.save();
     res.json({ success: true, data: { invoice } });
+  }),
+);
+
+// ─── GET /api/reconciliation/:id/export ──────────────────────────────────────
+
+router.get(
+  '/:id/export',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const doc = await ReconciliationMonth.findById(req.params.id);
+    if (!doc) throw createError('Reconciliation not found', 404);
+
+    const buffer = await generateReconciliationExcel(doc, env.DEFAULT_SUPERVISOR);
+    const filename = `Evoke_Sync_${doc.company}_${doc.month}_${doc.year}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
   }),
 );
 
