@@ -1,10 +1,22 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PrivateRoute } from './components/shared/PrivateRoute';
+import { Navbar } from './components/layout/Navbar';
 import { Login } from './pages/Login';
+import { Dashboard } from './pages/Dashboard';
+import { Reconciliation } from './pages/Reconciliation';
+import { History } from './pages/History';
+import { Settings } from './pages/Settings';
 
-function Dashboard() {
-  return <div className="p-8 text-gray-500">Dashboard — coming in Step 12</div>;
+function AppLayout() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+      <main>
+        <Outlet />
+      </main>
+    </div>
+  );
 }
 
 export default function App() {
@@ -14,13 +26,18 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route
-            path="/"
             element={
               <PrivateRoute>
-                <Dashboard />
+                <AppLayout />
               </PrivateRoute>
             }
-          />
+          >
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/reconciliation" element={<Reconciliation />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/history/:id" element={<Reconciliation />} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
