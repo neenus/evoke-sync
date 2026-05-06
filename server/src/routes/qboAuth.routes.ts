@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { asyncHandler } from '../middleware/async.middleware';
 import { createError } from '../middleware/error.middleware';
 import { requireAuth } from '../middleware/auth.middleware';
 import { oauthService } from '../services/oauth.service';
 import { qboService } from '../services/qbo.service';
 import { QBOToken } from '../models/QBOToken.model';
-import { env } from '../config/env';
 import { AuthenticatedRequest, Company } from '../types';
 
 const router = Router();
@@ -16,7 +16,12 @@ function isValidCompany(c: string): c is Company {
   return VALID_COMPANIES.includes(c as Company);
 }
 
+const exchangeSchema = z.object({
+  redirectUrl: z.string().url('redirectUrl must be the full callback URL'),
+});
+
 // ─── GET /api/auth/qbo/connect/:company ───────────────────────────────────────
+// Returns the Intuit authorization URL. Frontend navigates the browser there.
 
 router.get(
   '/connect/:company',
@@ -28,21 +33,27 @@ router.get(
     }
 
     const authUrl = oauthService.generateAuthUrl(company);
-    res.redirect(authUrl);
+    res.json({ success: true, data: { authUrl } });
   }),
 );
 
-// ─── GET /api/auth/qbo/callback ───────────────────────────────────────────────
-// QBO redirects here after user approval. Exchanges code, fetches real company name.
+// ─── POST /api/auth/qbo/exchange ──────────────────────────────────────────────
+// Frontend /callback page calls this after Intuit redirects back with the code.
 
-router.get(
-  '/callback',
-  asyncHandler(async (req: Request, res: Response) => {
-    const fullUrl = `${env.QBO_REDIRECT_URI}?${new URLSearchParams(
-      req.query as Record<string, string>,
-    ).toString()}`;
+router.post(
+  '/exchange',
+  requireAuth,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const result = exchangeSchema.safeParse(req.body);
+    if (!result.success) {
+      throw createError(result.error.errors[0].message, 400);
+    }
 
-    const tokenDoc = await oauthService.exchangeCodeForTokens(fullUrl);
+    const { redirectUrl } = result.data;
+    console.log('[QBO exchange] redirectUrl received:', redirectUrl);
+
+    const tokenDoc = await oauthService.exchangeCodeForTokens(redirectUrl);
+    console.log('[QBO exchange] token stored — company:', tokenDoc.company, 'realmId:', tokenDoc.companyId, 'env:', tokenDoc.environment, 'hasAccessToken:', !!tokenDoc.tokenData?.access_token, 'accessTokenExpiry:', tokenDoc.accessTokenExpiry);
 
     // Enrich with the real company name from QBO — non-fatal if it fails
     try {
@@ -53,7 +64,7 @@ router.get(
       console.warn(`Could not fetch company info for ${tokenDoc.company} — using realmId as name`);
     }
 
-    res.redirect(`${env.APP_URL}/settings?qbo_connected=${tokenDoc.company}`);
+    res.json({ success: true, data: { company: tokenDoc.company } });
   }),
 );
 
