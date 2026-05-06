@@ -50,8 +50,8 @@ async function bootstrap(): Promise<void> {
   await connectDB();
   await seedAdminUser();
 
-  const server = app.listen(env.PORT, () => {
-    console.log(`\n🚀  Evoke Sync API running on http://localhost:${env.PORT}`);
+  const server = app.listen(env.PORT, env.HOST, () => {
+    console.log(`\n🚀  Evoke Sync API running on http://${env.HOST}:${env.PORT}`);
     console.log(`📋  Environment: ${env.NODE_ENV}`);
     console.log(`🔗  QBO environment: ${env.QBO_ENVIRONMENT}\n`);
   });
