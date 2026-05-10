@@ -26,11 +26,28 @@ const ACTION_LABEL: Record<string, string> = {
 
 export function ReconciliationRow({ invoice, reconciliationId, readOnly, onUpdate }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [excluded, setExcluded] = useState(Boolean(invoice.excluded));
   const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>(invoice.sessionGroups);
   const [rawDates, setRawDates] = useState<string[]>(() =>
     invoice.sessionGroups.map((sg) => sg.sessionDates.join(', ')),
   );
   const [saving, setSaving] = useState(false);
+
+  async function toggleExclude() {
+    if (readOnly) return;
+    const next = !excluded;
+    try {
+      const { data } = await axios.patch<{ success: boolean; data: { invoice: InvoiceRow } }>(
+        `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}/exclude`,
+        { excluded: next },
+        { withCredentials: true },
+      );
+      setExcluded(next);
+      onUpdate(data.data.invoice);
+    } catch (err) {
+      console.error('Exclude toggle failed', err);
+    }
+  }
 
   const save = useCallback(
     async (groups: SessionGroup[]) => {
@@ -89,24 +106,40 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, onUpdat
   const deltaStyle = invoice.delta > 0 ? 'text-orange-600' : invoice.delta < 0 ? 'text-red-600' : 'text-gray-500';
 
   return (
-    <div className="border border-gray-200 rounded-lg bg-white">
+    <div className={`border rounded-lg ${excluded ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-200 bg-white'}`}>
       <div
-        className="flex items-center px-4 py-3 cursor-pointer hover:bg-gray-50"
+        className="flex items-center px-4 py-3 cursor-pointer hover:bg-gray-100"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex-1 grid grid-cols-6 gap-2 text-sm">
-          <span className="font-medium text-gray-900 col-span-2">{invoice.clientName}</span>
+          <span className={`font-medium col-span-2 ${excluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+            {invoice.clientName}
+          </span>
           <span className="text-gray-500 text-xs">{invoice.serviceType}</span>
           <span className="text-gray-600">
             {invoice.hoursBilled}h → {invoice.actualHours}h
           </span>
-          <span className={`font-medium ${deltaStyle}`}>
-            {formatDelta(invoice.delta)}
+          <span className={`font-medium ${excluded ? 'text-gray-400' : deltaStyle}`}>
+            {excluded ? '—' : formatDelta(invoice.delta)}
           </span>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${actionStyle}`}>
-            {ACTION_LABEL[invoice.action]}
-          </span>
+          {excluded ? (
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-200 text-gray-500">
+              ⊘ Excluded
+            </span>
+          ) : (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${actionStyle}`}>
+              {ACTION_LABEL[invoice.action]}
+            </span>
+          )}
         </div>
+        {!readOnly && (
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleExclude(); }}
+            className={`text-xs ml-3 shrink-0 ${excluded ? 'text-blue-500 hover:text-blue-700' : 'text-gray-400 hover:text-red-500'}`}
+          >
+            {excluded ? 'Include' : 'Exclude'}
+          </button>
+        )}
         <span className="text-gray-400 ml-2">{expanded ? '▲' : '▼'}</span>
       </div>
 
@@ -118,6 +151,13 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, onUpdat
             <div>Billed <strong className="text-gray-800">{formatCAD(invoice.amountBilled)}</strong></div>
             <div>Actual <strong className="text-gray-800">{formatCAD(invoice.actualAmount)}</strong></div>
           </div>
+
+          {invoice.description && (
+            <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+              <p className="text-xs font-semibold text-blue-700 mb-1">QBO Description</p>
+              <p className="text-xs text-gray-700 whitespace-pre-line">{invoice.description}</p>
+            </div>
+          )}
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -146,7 +186,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, onUpdat
                       }}
                       className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
                     >
-                      {[15, 30, 60, 90].map((min) => (
+                      {[15, 30, 40, 45, 60, 90, 120].map((min) => (
                         <option key={min} value={min}>{min} min</option>
                       ))}
                     </select>
