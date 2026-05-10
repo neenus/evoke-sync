@@ -68,6 +68,8 @@ const invoiceRowSchema = new Schema<IInvoiceRow>(
     notes: { type: String, default: '' },
     excluded: { type: Boolean, default: false },
     description: { type: String, default: '' },
+    isManual: { type: Boolean, default: false },
+    practitionerOverridden: { type: Boolean, default: false },
   },
   { _id: false },
 );

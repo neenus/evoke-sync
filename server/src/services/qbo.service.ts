@@ -166,6 +166,8 @@ class QBOService {
       notes: '',
       excluded: false,
       description,
+      isManual: false,
+      practitionerOverridden: false,
     };
   }
 }
