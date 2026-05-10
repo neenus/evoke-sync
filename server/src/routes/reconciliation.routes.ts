@@ -44,7 +44,7 @@ const invoiceUpdateSchema = z.object({
   ).optional(),
   notes: z.string().optional(),
   practitioner: z.string().min(1).optional(),
-  rate: z.number().nonnegative().optional(),
+  rate: z.number().positive().optional(),
 });
 
 const manualInvoiceSchema = z.object({
