@@ -190,7 +190,7 @@ function buildPractitionerSheet(
     const descText = inv.sessionGroups.map((sg) => sg.qboDescription).join('\n\n');
 
     const r = ws.addRow([
-      inv.invoiceNo,
+      inv.isManual ? '' : inv.invoiceNo,
       inv.clientName,
       inv.serviceType,
       inv.isInsurance ? 'Yes' : 'No',
@@ -200,7 +200,7 @@ function buildPractitionerSheet(
       inv.actualHours,
       cad(inv.actualAmount),
       cad(inv.delta),
-      actionLabel(inv.action),
+      inv.isManual ? `${actionLabel(inv.action)} (Manual)` : actionLabel(inv.action),
       sgText,
       descText,
       inv.notes,
@@ -272,14 +272,14 @@ function buildSummarySheet(
     const { bg, text } = actionColors(inv.action);
     const r = ws.addRow([
       inv.practitioner,
-      inv.invoiceNo,
+      inv.isManual ? '' : inv.invoiceNo,
       inv.clientName,
       inv.serviceType,
       cad(inv.rate),
       cad(inv.amountBilled),
       cad(inv.actualAmount),
       cad(inv.delta),
-      actionLabel(inv.action),
+      inv.isManual ? `${actionLabel(inv.action)} (Manual)` : actionLabel(inv.action),
     ]);
 
     for (let c = 1; c <= 9; c++) {
