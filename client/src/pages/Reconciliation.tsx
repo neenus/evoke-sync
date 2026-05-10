@@ -8,6 +8,7 @@ import { PractitionerUpload } from '../components/reconciliation/PractitionerUpl
 import { ReconciliationRow } from '../components/reconciliation/ReconciliationRow';
 import { SummaryPanel } from '../components/reconciliation/SummaryPanel';
 import { ApprovalBlock } from '../components/reconciliation/ApprovalBlock';
+import { AddManualInvoiceModal } from '../components/reconciliation/AddManualInvoiceModal';
 import { ReconciliationMonth, InvoiceRow } from '../types';
 
 const STEPS = ['Setup', 'Billing Notes', 'Upload', 'Reconcile', 'Approve'];
@@ -24,6 +25,7 @@ export function Reconciliation() {
   const [reconciliation, setReconciliation] = useState<ReconciliationMonth | null>(null);
   const [loadingExisting, setLoadingExisting] = useState(isResume);
   const [expandedInvoiceNo, setExpandedInvoiceNo] = useState<string | null>(null);
+  const [manualModalOpen, setManualModalOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -216,11 +218,21 @@ export function Reconciliation() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-800">Step 4 — Reconciliation</h2>
-            {isApproved && (
-              <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-medium">
-                🔒 Approved — Read Only
-              </span>
-            )}
+            <div className="flex items-center gap-3">
+              {isApproved && (
+                <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-medium">
+                  🔒 Approved — Read Only
+                </span>
+              )}
+              {!isApproved && (
+                <button
+                  onClick={() => setManualModalOpen(true)}
+                  className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                >
+                  + Add Manual Invoice
+                </button>
+              )}
+            </div>
           </div>
 
           {Object.entries(byPractitioner).map(([practitioner, invoices]) => (
@@ -248,6 +260,15 @@ export function Reconciliation() {
               </div>
             </div>
           ))}
+
+          {manualModalOpen && reconciliation && (
+            <AddManualInvoiceModal
+              reconciliationId={reconciliation._id}
+              practitionerOptions={practitionerOptions}
+              onClose={() => setManualModalOpen(false)}
+              onCreated={refreshReconciliation}
+            />
+          )}
 
           <div className="flex justify-between">
             <button onClick={() => setStep(2)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
