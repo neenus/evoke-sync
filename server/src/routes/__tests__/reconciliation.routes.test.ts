@@ -54,3 +54,54 @@ describe('PATCH /api/reconciliation/:id/invoice/:invoiceNo', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('POST /api/reconciliation/:id/invoice', () => {
+  it('creates a manual invoice and returns 201', async () => {
+    const doc = await makeReconciliation([]);
+
+    const res = await request(app)
+      .post(`/api/reconciliation/${doc.id}/invoice`)
+      .set('Cookie', authCookie())
+      .send({
+        clientName: 'New Student',
+        practitioner: 'Jane Doe',
+        serviceType: 'Reading Remediation',
+        rate: 120,
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.invoice.isManual).toBe(true);
+    expect(res.body.data.invoice.invoiceNo).toMatch(/^MANUAL-\d+$/);
+    expect(res.body.data.invoice.clientName).toBe('New Student');
+    expect(res.body.data.invoice.practitioner).toBe('Jane Doe');
+    expect(res.body.data.invoice.rate).toBe(120);
+    expect(res.body.data.invoice.amountBilled).toBe(0);
+  });
+
+  it('returns 400 when required fields are missing', async () => {
+    const doc = await makeReconciliation([]);
+
+    const res = await request(app)
+      .post(`/api/reconciliation/${doc.id}/invoice`)
+      .set('Cookie', authCookie())
+      .send({ clientName: 'Only This' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 403 on approved reconciliation', async () => {
+    const doc = await makeReconciliation([], 'approved');
+
+    const res = await request(app)
+      .post(`/api/reconciliation/${doc.id}/invoice`)
+      .set('Cookie', authCookie())
+      .send({
+        clientName: 'X',
+        practitioner: 'Y',
+        serviceType: 'Reading Remediation',
+        rate: 100,
+      });
+
+    expect(res.status).toBe(403);
+  });
+});

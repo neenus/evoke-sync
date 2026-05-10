@@ -3,10 +3,10 @@ import { z } from 'zod';
 import { asyncHandler } from '../middleware/async.middleware';
 import { createError } from '../middleware/error.middleware';
 import { requireAuth } from '../middleware/auth.middleware';
-import { ReconciliationMonth } from '../models/ReconciliationMonth.model';
+import { ReconciliationMonth, IInvoiceRow } from '../models/ReconciliationMonth.model';
 import { QBOToken } from '../models/QBOToken.model';
 import { qboService } from '../services/qbo.service';
-import { recalcInvoice } from '../services/reconciliation.service';
+import { recalcInvoice, createManualInvoice } from '../services/reconciliation.service';
 import { ApprovalRecord } from '../models/ApprovalRecord.model';
 import { generateReconciliationExcel } from '../services/excelExport.service';
 import { env } from '../config/env';
@@ -41,6 +41,14 @@ const invoiceUpdateSchema = z.object({
   notes: z.string().optional(),
   practitioner: z.string().min(1).optional(),
   rate: z.number().nonnegative().optional(),
+});
+
+const manualInvoiceSchema = z.object({
+  clientName: z.string().min(1, 'clientName required'),
+  practitioner: z.string().min(1, 'practitioner required'),
+  serviceType: z.string().min(1, 'serviceType required'),
+  rate: z.number().positive('rate must be > 0'),
+  isInsurance: z.boolean().optional(),
 });
 
 function isApproved(status: string): boolean {
@@ -133,6 +141,27 @@ router.patch(
     await doc.save();
 
     res.json({ success: true, data: { billingNotesHtml: doc.billingNotesHtml } });
+  }),
+);
+
+// ─── POST /api/reconciliation/:id/invoice (manual) ───────────────────────────────────────
+
+router.post(
+  '/:id/invoice',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const doc = await ReconciliationMonth.findById(req.params.id);
+    if (!doc) throw createError('Reconciliation not found', 404);
+    if (isApproved(doc.status)) throw createError('Approved reconciliations are locked', 403);
+
+    const result = manualInvoiceSchema.safeParse(req.body);
+    if (!result.success) throw createError(result.error.errors[0].message, 400);
+
+    const newInvoice = createManualInvoice(result.data);
+    doc.invoices.push(newInvoice as IInvoiceRow);
+    await doc.save();
+
+    const created = doc.invoices[doc.invoices.length - 1];
+    res.status(201).json({ success: true, data: { invoice: created } });
   }),
 );
 
