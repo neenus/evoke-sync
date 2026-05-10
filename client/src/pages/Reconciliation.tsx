@@ -9,6 +9,7 @@ import { ReconciliationRow } from '../components/reconciliation/ReconciliationRo
 import { SummaryPanel } from '../components/reconciliation/SummaryPanel';
 import { ApprovalBlock } from '../components/reconciliation/ApprovalBlock';
 import { AddManualInvoiceModal } from '../components/reconciliation/AddManualInvoiceModal';
+import { ReconciliationStats } from '../components/reconciliation/ReconciliationStats';
 import { ReconciliationMonth, InvoiceRow } from '../types';
 
 const STEPS = ['Setup', 'Billing Notes', 'Upload', 'Reconcile', 'Approve'];
@@ -235,6 +236,8 @@ export function Reconciliation() {
               )}
             </div>
           </div>
+
+          <ReconciliationStats invoices={reconciliation.invoices} />
 
           {Object.entries(byPractitioner).map(([practitioner, invoices]) => {
             const isOpen = expandedPractitioners.has(practitioner);
