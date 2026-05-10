@@ -120,6 +120,10 @@ export function Reconciliation() {
       }, {})
     : {};
 
+  const practitionerOptions = reconciliation
+    ? [...new Set(reconciliation.invoices.map((i) => i.practitioner).filter(Boolean))].sort()
+    : [];
+
   if (loadingExisting) {
     return (
       <div className="max-w-5xl mx-auto py-8 px-4">
@@ -236,6 +240,7 @@ export function Reconciliation() {
                     readOnly={isApproved}
                     expanded={expandedInvoiceNo === inv.invoiceNo}
                     onToggle={() => setExpandedInvoiceNo((prev) => (prev === inv.invoiceNo ? null : inv.invoiceNo))}
+                    practitionerOptions={practitionerOptions}
                     onUpdate={handleInvoiceUpdate}
                   />
                 ))}
