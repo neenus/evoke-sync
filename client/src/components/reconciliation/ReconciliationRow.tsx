@@ -11,6 +11,7 @@ interface Props {
   onToggle: () => void;
   practitionerOptions: string[];
   onUpdate: (updated: InvoiceRow) => void;
+  onRefresh: () => void;
 }
 
 const ACTION_STYLE: Record<string, string> = {
@@ -27,7 +28,7 @@ const ACTION_LABEL: Record<string, string> = {
   awaiting_data: '⏳ Awaiting Data',
 };
 
-export function ReconciliationRow({ invoice, reconciliationId, readOnly, expanded, onToggle, practitionerOptions, onUpdate }: Props) {
+export function ReconciliationRow({ invoice, reconciliationId, readOnly, expanded, onToggle, practitionerOptions, onUpdate, onRefresh }: Props) {
   const [excluded, setExcluded] = useState(Boolean(invoice.excluded));
   const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>(invoice.sessionGroups);
   const [rawDates, setRawDates] = useState<string[]>(() =>
@@ -134,6 +135,37 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
     save(updated);
   }
 
+  async function handleRefetch() {
+    if (readOnly) return;
+    if (!confirm('Refetch this invoice from QBO? Your session groups, notes, and exclusion status will be preserved.')) return;
+    try {
+      await axios.post(
+        `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}/refetch`,
+        {},
+        { withCredentials: true },
+      );
+      onRefresh();
+    } catch (err) {
+      const msg = axios.isAxiosError(err) ? err.response?.data?.error : 'Refetch failed';
+      alert(String(msg ?? 'Refetch failed'));
+    }
+  }
+
+  async function handleDelete() {
+    if (readOnly) return;
+    if (!confirm('Delete this manual invoice? This cannot be undone.')) return;
+    try {
+      await axios.delete(
+        `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}`,
+        { withCredentials: true },
+      );
+      onRefresh();
+    } catch (err) {
+      const msg = axios.isAxiosError(err) ? err.response?.data?.error : 'Delete failed';
+      alert(String(msg ?? 'Delete failed'));
+    }
+  }
+
   const actionStyle = ACTION_STYLE[invoice.action] ?? ACTION_STYLE.awaiting_data;
   const deltaStyle = invoice.delta > 0 ? 'text-orange-600' : invoice.delta < 0 ? 'text-red-600' : 'text-gray-500';
 
@@ -148,6 +180,11 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
             {invoice.clientName}
             {invoice.notes && (
               <span title="Has notes" className="text-xs text-blue-500 ml-2">📝</span>
+            )}
+            {invoice.isManual && (
+              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-semibold align-middle">
+                Manual
+              </span>
             )}
           </span>
           <span className="text-gray-500 text-xs">{invoice.serviceType}</span>
@@ -180,8 +217,23 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
 
       {expanded && (
         <div className="border-t border-gray-100 px-4 py-4 space-y-4">
+          {!invoice.isManual && !readOnly && (
+            <div className="flex justify-end">
+              <button
+                onClick={handleRefetch}
+                className="text-xs px-3 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
+              >
+                🔄 Refetch from QBO
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-4 gap-4 text-xs text-gray-500">
-            <div>Invoice # <strong className="text-gray-800">{invoice.invoiceNo}</strong></div>
+            <div>
+              Invoice #{' '}
+              <strong className="text-gray-800">
+                {invoice.isManual ? <em className="text-gray-400 font-normal">(create in QBO)</em> : invoice.invoiceNo}
+              </strong>
+            </div>
             <div>Rate <strong className="text-gray-800">{formatCAD(invoice.rate)}/hr</strong></div>
             <div>Billed <strong className="text-gray-800">{formatCAD(invoice.amountBilled)}</strong></div>
             <div>Actual <strong className="text-gray-800">{formatCAD(invoice.actualAmount)}</strong></div>
@@ -332,6 +384,17 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
               {invoice.parseWarnings.map((w, i) => (
                 <p key={i} className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1">{w}</p>
               ))}
+            </div>
+          )}
+
+          {invoice.isManual && !readOnly && (
+            <div className="pt-2 border-t border-gray-100">
+              <button
+                onClick={handleDelete}
+                className="text-xs text-red-600 hover:text-red-800"
+              >
+                Delete manual invoice
+              </button>
             </div>
           )}
         </div>
