@@ -170,9 +170,9 @@ export function parsePractitionerInvoice(buffer: Buffer, fileName: string): Pars
     const h = String(headerRow[c] ?? '').toLowerCase();
     if (/student|client name/.test(h)) colStudent = c;
     else if (/service|description/.test(h)) colService = c;
-    else if (/billable.+date|session.+date|meeting.+date/.test(h)) colDates = c;
-    else if (/length|duration|min/.test(h)) colLength = c;
-    else if (/non.?bill|make.?up/.test(h)) colNonBillable = c;
+    else if (/make.?up/.test(h)) colNonBillable = c;
+    else if (/billable.+date|session.+date|meeting.+date|regular.+date/.test(h)) colDates = c;
+    else if (/length|duration/.test(h)) colLength = c;
   }
 
   // ─── Parse data rows ────────────────────────────────────────────────────────
