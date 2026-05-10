@@ -1,5 +1,5 @@
 import { IInvoiceRow, ISessionGroup } from '../models/ReconciliationMonth.model';
-import { InvoiceAction, SessionGroup } from '../types';
+import { InvoiceAction, InvoiceRow, SessionGroup } from '../types';
 import { generateDescription } from './descriptionGenerator.service';
 
 export interface RecalcInput {
@@ -62,4 +62,36 @@ export function recalcInvoice(input: RecalcInput): void {
           : 'credit_memo';
 
   invoice.action = action;
+}
+
+export interface ManualInvoiceInput {
+  clientName: string;
+  practitioner: string;
+  serviceType: string;
+  rate: number;
+  isInsurance?: boolean;
+}
+
+export function createManualInvoice(input: ManualInvoiceInput): InvoiceRow {
+  return {
+    invoiceNo: `MANUAL-${Date.now()}`,
+    clientName: input.clientName.trim(),
+    practitioner: input.practitioner.trim(),
+    serviceType: input.serviceType,
+    hoursBilled: 0,
+    rate: input.rate,
+    amountBilled: 0,
+    isInsurance: input.isInsurance ?? false,
+    actualHours: 0,
+    actualAmount: 0,
+    delta: 0,
+    action: 'awaiting_data',
+    sessionGroups: [],
+    parseWarnings: [],
+    notes: '',
+    excluded: false,
+    description: '',
+    isManual: true,
+    practitionerOverridden: false,
+  };
 }
