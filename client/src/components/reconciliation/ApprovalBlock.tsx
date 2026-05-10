@@ -14,7 +14,7 @@ export function ApprovalBlock({ reconciliationId, invoices, onApproved }: Props)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const awaitingCount = invoices.filter((i) => i.action === 'awaiting_data').length;
+  const awaitingCount = invoices.filter((i) => i.action === 'awaiting_data' && !i.excluded).length;
   const canApprove = awaitingCount === 0 && approvedBy.trim() !== '';
 
   async function handleApprove() {
