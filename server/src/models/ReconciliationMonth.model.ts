@@ -66,6 +66,8 @@ const invoiceRowSchema = new Schema<IInvoiceRow>(
     sessionGroups: [sessionGroupSchema],
     parseWarnings: [{ type: String }],
     notes: { type: String, default: '' },
+    excluded: { type: Boolean, default: false },
+    description: { type: String, default: '' },
   },
   { _id: false },
 );

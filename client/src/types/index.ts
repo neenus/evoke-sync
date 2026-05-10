@@ -39,6 +39,8 @@ export interface InvoiceRow {
   sessionGroups: SessionGroup[];
   parseWarnings: string[];
   notes: string;
+  excluded: boolean;
+  description: string;
 }
 
 export interface ReconciliationMonth {
