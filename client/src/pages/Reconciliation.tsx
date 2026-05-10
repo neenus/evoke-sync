@@ -26,6 +26,7 @@ export function Reconciliation() {
   const [loadingExisting, setLoadingExisting] = useState(isResume);
   const [expandedInvoiceNo, setExpandedInvoiceNo] = useState<string | null>(null);
   const [manualModalOpen, setManualModalOpen] = useState(false);
+  const [expandedPractitioners, setExpandedPractitioners] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!id) return;
@@ -235,31 +236,55 @@ export function Reconciliation() {
             </div>
           </div>
 
-          {Object.entries(byPractitioner).map(([practitioner, invoices]) => (
-            <div key={practitioner} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-b border-gray-200">
-                <span className="text-sm font-semibold text-gray-800">{practitioner}</span>
-                <span className="text-xs text-gray-500">
-                  {invoices.length} invoice{invoices.length > 1 ? 's' : ''}
-                </span>
+          {Object.entries(byPractitioner).map(([practitioner, invoices]) => {
+            const isOpen = expandedPractitioners.has(practitioner);
+            return (
+              <div key={practitioner} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedPractitioners((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(practitioner)) next.delete(practitioner);
+                      else next.add(practitioner);
+                      return next;
+                    })
+                  }
+                  className="w-full bg-gray-50 px-4 py-3 flex items-center justify-between border-b border-gray-200 hover:bg-gray-100 transition-colors"
+                >
+                  <span className="text-sm font-semibold text-gray-800">{practitioner}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500">
+                      {invoices.length} invoice{invoices.length > 1 ? 's' : ''}
+                    </span>
+                    <svg
+                      className={`w-4 h-4 text-gray-400 transition-transform duration-150 ${isOpen ? '' : '-rotate-90'}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="p-4 space-y-2">
+                    {invoices.map((inv) => (
+                      <ReconciliationRow
+                        key={inv.invoiceNo}
+                        invoice={inv}
+                        reconciliationId={reconciliation._id}
+                        readOnly={isApproved}
+                        expanded={expandedInvoiceNo === inv.invoiceNo}
+                        onToggle={() => setExpandedInvoiceNo((prev) => (prev === inv.invoiceNo ? null : inv.invoiceNo))}
+                        practitionerOptions={practitionerOptions}
+                        onUpdate={handleInvoiceUpdate}
+                        onRefresh={refreshReconciliation}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="p-4 space-y-2">
-                {invoices.map((inv) => (
-                  <ReconciliationRow
-                    key={inv.invoiceNo}
-                    invoice={inv}
-                    reconciliationId={reconciliation._id}
-                    readOnly={isApproved}
-                    expanded={expandedInvoiceNo === inv.invoiceNo}
-                    onToggle={() => setExpandedInvoiceNo((prev) => (prev === inv.invoiceNo ? null : inv.invoiceNo))}
-                    practitionerOptions={practitionerOptions}
-                    onUpdate={handleInvoiceUpdate}
-                    onRefresh={refreshReconciliation}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
 
           {manualModalOpen && reconciliation && (
             <AddManualInvoiceModal
