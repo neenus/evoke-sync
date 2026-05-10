@@ -87,8 +87,17 @@ router.post(
         grouped.get(key)!.push(session.sessionDate);
       }
 
-      // Update matching invoice rows (fuzzy client name match)
+      // Update matching invoice rows (fuzzy client name match, scoped to this practitioner)
+      const practitionerNameLower = practitionerName.toLowerCase().replace(/\s+/g, '');
       for (const invoice of reconciliation.invoices) {
+        // Only consider invoices attributed to this practitioner (fuzzy match on practitioner name too)
+        const invoicePractitionerLower = invoice.practitioner.toLowerCase().replace(/\s+/g, '');
+        const practitionerMatches =
+          invoicePractitionerLower === practitionerNameLower ||
+          invoicePractitionerLower.includes(practitionerNameLower) ||
+          practitionerNameLower.includes(invoicePractitionerLower);
+        if (!practitionerMatches) continue;
+
         const invoiceNameLower = invoice.clientName.toLowerCase().replace(/\s+/g, '');
         const sessionGroups: typeof invoice.sessionGroups = [];
 
