@@ -3,48 +3,10 @@ import { config as loadEnv } from 'dotenv';
 
 loadEnv({ path: path.resolve(__dirname, '..', '..', '.env') });
 
-import express from 'express';
-import helmet from 'helmet';
-import cors from 'cors';
-import morgan from 'morgan';
-import cookieParser from 'cookie-parser';
-
+import { app } from './app';
 import { env } from './config/env';
 import { connectDB, disconnectDB } from './config/db';
 import { seedAdminUser } from './config/seed';
-import routes from './routes';
-import { notFoundHandler, errorHandler } from './middleware/error.middleware';
-
-const app = express();
-
-app.use(helmet());
-app.use(
-  cors({
-    origin: env.APP_URL,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
-  }),
-);
-app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-
-// ─── Routes ───────────────────────────────────────────────────────────────────
-
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', env: env.NODE_ENV });
-});
-
-app.use('/api', routes);
-
-// ─── Error handling ───────────────────────────────────────────────────────────
-
-app.use(notFoundHandler);
-app.use(errorHandler);
-
-// ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 async function bootstrap(): Promise<void> {
   await connectDB();
