@@ -146,8 +146,8 @@ router.post(
     const result = approveSchema.safeParse(req.body);
     if (!result.success) throw createError(result.error.errors[0].message, 400);
 
-    // Guard: reject if any invoices are awaiting data
-    const awaitingCount = doc.invoices.filter((inv) => inv.action === 'awaiting_data').length;
+    // Guard: reject if any non-excluded invoices are awaiting data
+    const awaitingCount = doc.invoices.filter((inv) => inv.action === 'awaiting_data' && !inv.excluded).length;
     if (awaitingCount > 0) {
       throw createError(
         `Cannot approve: ${awaitingCount} invoice${awaitingCount > 1 ? 's' : ''} still awaiting session data`,
@@ -215,6 +215,25 @@ router.patch(
     });
 
     await doc.save();
+    res.json({ success: true, data: { invoice } });
+  }),
+);
+
+// ─── PATCH /api/reconciliation/:id/invoice/:invoiceNo/exclude ────────────────
+
+router.patch(
+  '/:id/invoice/:invoiceNo/exclude',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const doc = await ReconciliationMonth.findById(req.params.id);
+    if (!doc) throw createError('Reconciliation not found', 404);
+    if (isApproved(doc.status)) throw createError('Approved reconciliations are locked', 403);
+
+    const invoice = doc.invoices.find((inv) => inv.invoiceNo === req.params.invoiceNo);
+    if (!invoice) throw createError(`Invoice ${req.params.invoiceNo} not found`, 404);
+
+    invoice.excluded = Boolean(req.body.excluded);
+    await doc.save();
+
     res.json({ success: true, data: { invoice } });
   }),
 );
