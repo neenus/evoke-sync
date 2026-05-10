@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { recalcInvoice } from '../reconciliation.service';
+import { recalcInvoice, createManualInvoice } from '../reconciliation.service';
 import { makeInvoice } from '../../__tests__/helpers';
 import type { IInvoiceRow } from '../../models/ReconciliationMonth.model';
 
@@ -108,5 +108,53 @@ describe('recalcInvoice', () => {
       month: 'April',
     });
     expect(invoice.action).toBe('awaiting_data');
+  });
+});
+
+describe('createManualInvoice', () => {
+  it('returns a row with isManual true and zeroed billed/actual fields', () => {
+    const inv = createManualInvoice({
+      clientName: 'Alex Smith',
+      practitioner: 'Jane Doe',
+      serviceType: 'Reading Remediation',
+      rate: 150,
+    });
+
+    expect(inv.isManual).toBe(true);
+    expect(inv.invoiceNo).toMatch(/^MANUAL-\d+$/);
+    expect(inv.clientName).toBe('Alex Smith');
+    expect(inv.practitioner).toBe('Jane Doe');
+    expect(inv.rate).toBe(150);
+    expect(inv.hoursBilled).toBe(0);
+    expect(inv.amountBilled).toBe(0);
+    expect(inv.actualHours).toBe(0);
+    expect(inv.actualAmount).toBe(0);
+    expect(inv.delta).toBe(0);
+    expect(inv.action).toBe('awaiting_data');
+    expect(inv.excluded).toBe(false);
+    expect(inv.isInsurance).toBe(false);
+    expect(inv.practitionerOverridden).toBe(false);
+    expect(inv.sessionGroups).toEqual([]);
+    expect(inv.parseWarnings).toEqual([]);
+    expect(inv.notes).toBe('');
+    expect(inv.description).toBe('');
+  });
+
+  it('honors isInsurance when supplied', () => {
+    const inv = createManualInvoice({
+      clientName: 'A',
+      practitioner: 'B',
+      serviceType: 'Math Remediation',
+      rate: 100,
+      isInsurance: true,
+    });
+    expect(inv.isInsurance).toBe(true);
+  });
+
+  it('produces unique invoiceNo across rapid successive calls', async () => {
+    const a = createManualInvoice({ clientName: 'A', practitioner: 'B', serviceType: 'X', rate: 1 });
+    await new Promise((r) => setTimeout(r, 2));
+    const b = createManualInvoice({ clientName: 'A', practitioner: 'B', serviceType: 'X', rate: 1 });
+    expect(a.invoiceNo).not.toBe(b.invoiceNo);
   });
 });
