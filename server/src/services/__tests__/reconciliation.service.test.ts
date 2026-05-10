@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { recalcInvoice, createManualInvoice } from '../reconciliation.service';
-import { makeInvoice } from '../../__tests__/helpers';
+import { describe, it, expect, vi } from 'vitest';
+import { recalcInvoice, createManualInvoice, refetchInvoiceFromQBO } from '../reconciliation.service';
+import { makeInvoice, makeReconciliation } from '../../__tests__/helpers';
 import type { IInvoiceRow } from '../../models/ReconciliationMonth.model';
+import { qboService } from '../qbo.service';
+import { IQBOTokenDocument } from '../../models/QBOToken.model';
+
+const fakeTokenDoc = {} as unknown as IQBOTokenDocument;
 
 function asMutableInvoice(): IInvoiceRow {
   return makeInvoice() as unknown as IInvoiceRow;
@@ -156,5 +160,110 @@ describe('createManualInvoice', () => {
     await new Promise((r) => setTimeout(r, 2));
     const b = createManualInvoice({ clientName: 'A', practitioner: 'B', serviceType: 'X', rate: 1 });
     expect(a.invoiceNo).not.toBe(b.invoiceNo);
+  });
+});
+
+describe('refetchInvoiceFromQBO', () => {
+  it('overwrites QBO-source fields and preserves user work on success', async () => {
+    const doc = await makeReconciliation([
+      makeInvoice({
+        invoiceNo: '1001',
+        clientName: 'Old',
+        rate: 80,
+        amountBilled: 400,
+        notes: 'my note',
+        sessionGroups: [{ sessionLength: 60, sessionDates: ['1', '2'], qboDescription: '' }],
+      }),
+    ]);
+
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue(
+      makeInvoice({
+        invoiceNo: '1001',
+        clientName: 'New',
+        practitioner: 'New Practitioner',
+        serviceType: 'Math Remediation',
+        hoursBilled: 5,
+        rate: 100,
+        amountBilled: 500,
+        isInsurance: true,
+        description: 'fresh QBO desc',
+      }),
+    );
+
+    const updated = await refetchInvoiceFromQBO(doc, '1001', fakeTokenDoc, 'Test Supervisor');
+
+    expect(updated.clientName).toBe('New');
+    expect(updated.rate).toBe(100);
+    expect(updated.amountBilled).toBe(500);
+    expect(updated.description).toBe('fresh QBO desc');
+    expect(updated.notes).toBe('my note');
+    expect(updated.sessionGroups.length).toBe(1);
+    vi.restoreAllMocks();
+  });
+
+  it('preserves practitioner when practitionerOverridden is true', async () => {
+    const doc = await makeReconciliation([
+      makeInvoice({
+        invoiceNo: '1002',
+        practitioner: 'Manual Override',
+        practitionerOverridden: true,
+      }),
+    ]);
+
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue(
+      makeInvoice({ invoiceNo: '1002', practitioner: 'QBO Detected' }),
+    );
+
+    const updated = await refetchInvoiceFromQBO(doc, '1002', fakeTokenDoc, 'X');
+    expect(updated.practitioner).toBe('Manual Override');
+    expect(updated.practitionerOverridden).toBe(true);
+    vi.restoreAllMocks();
+  });
+
+  it('overwrites practitioner when practitionerOverridden is false', async () => {
+    const doc = await makeReconciliation([
+      makeInvoice({
+        invoiceNo: '1003',
+        practitioner: 'Old',
+        practitionerOverridden: false,
+      }),
+    ]);
+
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue(
+      makeInvoice({ invoiceNo: '1003', practitioner: 'Fresh' }),
+    );
+
+    const updated = await refetchInvoiceFromQBO(doc, '1003', fakeTokenDoc, 'X');
+    expect(updated.practitioner).toBe('Fresh');
+    vi.restoreAllMocks();
+  });
+
+  it('marks excluded with parseWarning when QBO returns null', async () => {
+    const doc = await makeReconciliation([makeInvoice({ invoiceNo: '1004' })]);
+
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue(null);
+
+    const updated = await refetchInvoiceFromQBO(doc, '1004', fakeTokenDoc, 'X');
+    expect(updated.excluded).toBe(true);
+    expect(updated.parseWarnings.some((w) => w.includes('not found in QBO'))).toBe(true);
+    vi.restoreAllMocks();
+  });
+
+  it('throws when called on a manual invoice', async () => {
+    const doc = await makeReconciliation([
+      makeInvoice({ invoiceNo: 'MANUAL-1', isManual: true }),
+    ]);
+
+    await expect(
+      refetchInvoiceFromQBO(doc, 'MANUAL-1', fakeTokenDoc, 'X'),
+    ).rejects.toThrow(/manual/i);
+  });
+
+  it('throws when invoice is not found in the reconciliation', async () => {
+    const doc = await makeReconciliation([]);
+
+    await expect(
+      refetchInvoiceFromQBO(doc, 'NOPE', fakeTokenDoc, 'X'),
+    ).rejects.toThrow(/not found/i);
   });
 });

@@ -1,6 +1,8 @@
-import { IInvoiceRow, ISessionGroup } from '../models/ReconciliationMonth.model';
+import { IInvoiceRow, ISessionGroup, IReconciliationMonthDocument } from '../models/ReconciliationMonth.model';
 import { InvoiceAction, InvoiceRow, SessionGroup } from '../types';
 import { generateDescription } from './descriptionGenerator.service';
+import { qboService } from './qbo.service';
+import { IQBOTokenDocument } from '../models/QBOToken.model';
 
 export interface RecalcInput {
   invoice: IInvoiceRow;
@@ -94,4 +96,45 @@ export function createManualInvoice(input: ManualInvoiceInput): InvoiceRow {
     isManual: true,
     practitionerOverridden: false,
   };
+}
+
+export async function refetchInvoiceFromQBO(
+  doc: IReconciliationMonthDocument,
+  invoiceNo: string,
+  tokenDoc: IQBOTokenDocument,
+  supervisorDetails: string,
+): Promise<IInvoiceRow> {
+  const existing = doc.invoices.find((inv) => inv.invoiceNo === invoiceNo);
+  if (!existing) throw new Error(`Invoice ${invoiceNo} not found in reconciliation`);
+  if (existing.isManual) throw new Error('Cannot refetch a manual invoice from QBO');
+
+  const fresh = await qboService.fetchInvoiceByNumber(tokenDoc, invoiceNo);
+
+  if (!fresh) {
+    existing.excluded = true;
+    existing.parseWarnings.push(
+      `Invoice ${invoiceNo} not found in QBO on ${new Date().toISOString().slice(0, 10)} — auto-excluded`,
+    );
+    return existing;
+  }
+
+  existing.clientName = fresh.clientName;
+  existing.serviceType = fresh.serviceType;
+  existing.hoursBilled = fresh.hoursBilled;
+  existing.rate = fresh.rate;
+  existing.amountBilled = fresh.amountBilled;
+  existing.isInsurance = fresh.isInsurance;
+  existing.description = fresh.description;
+
+  if (!existing.practitionerOverridden) {
+    existing.practitioner = fresh.practitioner;
+  }
+
+  recalcInvoice({
+    invoice: existing,
+    supervisorDetails,
+    month: doc.month,
+  });
+
+  return existing;
 }
