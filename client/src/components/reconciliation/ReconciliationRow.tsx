@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import axios from 'axios';
 import { InvoiceRow, SessionGroup } from '../../types';
 import { formatCAD, formatDelta } from '../../utils/formatters';
@@ -9,6 +9,7 @@ interface Props {
   readOnly: boolean;
   expanded: boolean;
   onToggle: () => void;
+  practitionerOptions: string[];
   onUpdate: (updated: InvoiceRow) => void;
 }
 
@@ -26,13 +27,23 @@ const ACTION_LABEL: Record<string, string> = {
   awaiting_data: '⏳ Awaiting Data',
 };
 
-export function ReconciliationRow({ invoice, reconciliationId, readOnly, expanded, onToggle, onUpdate }: Props) {
+export function ReconciliationRow({ invoice, reconciliationId, readOnly, expanded, onToggle, practitionerOptions, onUpdate }: Props) {
   const [excluded, setExcluded] = useState(Boolean(invoice.excluded));
   const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>(invoice.sessionGroups);
   const [rawDates, setRawDates] = useState<string[]>(() =>
     invoice.sessionGroups.map((sg) => sg.sessionDates.join(', ')),
   );
   const [saving, setSaving] = useState(false);
+
+  const [practitionerDraft, setPractitionerDraft] = useState(invoice.practitioner);
+  const [rateDraft, setRateDraft] = useState(String(invoice.rate));
+  const [notesDraft, setNotesDraft] = useState(invoice.notes);
+
+  useEffect(() => {
+    setPractitionerDraft(invoice.practitioner);
+    setRateDraft(String(invoice.rate));
+    setNotesDraft(invoice.notes);
+  }, [invoice.practitioner, invoice.rate, invoice.notes]);
 
   async function toggleExclude() {
     if (readOnly) return;
@@ -49,6 +60,26 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
       console.error('Exclude toggle failed', err);
     }
   }
+
+  const savePartial = useCallback(
+    async (patch: Partial<{ practitioner: string; rate: number; notes: string; sessionGroups: SessionGroup[] }>) => {
+      if (readOnly) return;
+      setSaving(true);
+      try {
+        const { data } = await axios.patch<{ success: boolean; data: { invoice: InvoiceRow } }>(
+          `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}`,
+          patch,
+          { withCredentials: true },
+        );
+        onUpdate(data.data.invoice);
+      } catch (err) {
+        console.error('Save failed', err);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [reconciliationId, invoice.invoiceNo, readOnly, onUpdate],
+  );
 
   const save = useCallback(
     async (groups: SessionGroup[]) => {
@@ -115,6 +146,9 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
         <div className="flex-1 grid grid-cols-6 gap-2 text-sm">
           <span className={`font-medium col-span-2 ${excluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>
             {invoice.clientName}
+            {invoice.notes && (
+              <span title="Has notes" className="text-xs text-blue-500 ml-2">📝</span>
+            )}
           </span>
           <span className="text-gray-500 text-xs">{invoice.serviceType}</span>
           <span className="text-gray-600">
@@ -151,6 +185,46 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
             <div>Rate <strong className="text-gray-800">{formatCAD(invoice.rate)}/hr</strong></div>
             <div>Billed <strong className="text-gray-800">{formatCAD(invoice.amountBilled)}</strong></div>
             <div>Actual <strong className="text-gray-800">{formatCAD(invoice.actualAmount)}</strong></div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-gray-500">Practitioner</label>
+              <input
+                type="text"
+                list={`practitioners-${invoice.invoiceNo}`}
+                value={practitionerDraft}
+                disabled={readOnly}
+                onChange={(e) => setPractitionerDraft(e.target.value)}
+                onBlur={() => {
+                  if (practitionerDraft.trim() && practitionerDraft !== invoice.practitioner) {
+                    savePartial({ practitioner: practitionerDraft.trim() });
+                  }
+                }}
+                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
+              />
+              <datalist id={`practitioners-${invoice.invoiceNo}`}>
+                {practitionerOptions.map((p) => <option key={p} value={p} />)}
+              </datalist>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Rate ($/hr)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={rateDraft}
+                disabled={readOnly}
+                onChange={(e) => setRateDraft(e.target.value)}
+                onBlur={() => {
+                  const n = parseFloat(rateDraft);
+                  if (!Number.isNaN(n) && n >= 0 && n !== invoice.rate) {
+                    savePartial({ rate: n });
+                  }
+                }}
+                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
+              />
+            </div>
           </div>
 
           {invoice.description && (
@@ -234,6 +308,21 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
             {sessionGroups.length === 0 && !readOnly && (
               <p className="text-xs text-gray-400 italic">No session groups. Click "Add Group" to start.</p>
             )}
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500">Notes (private — not synced to QBO)</label>
+            <textarea
+              value={notesDraft}
+              disabled={readOnly}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              onBlur={() => {
+                if (notesDraft !== invoice.notes) savePartial({ notes: notesDraft });
+              }}
+              rows={3}
+              className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
+              placeholder="Optional notes for your reference"
+            />
           </div>
 
           {saving && <p className="text-xs text-blue-500">Saving…</p>}
