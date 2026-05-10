@@ -2,14 +2,18 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { StatusBadge } from '../components/shared/StatusBadge';
+import { ConfirmModal } from '../components/shared/ConfirmModal';
 import { companyLabel, formatMonth } from '../utils/formatters';
 import { ReconciliationMonth } from '../types';
 
 type HistoryItem = Pick<ReconciliationMonth, '_id' | 'month' | 'year' | 'company' | 'status' | 'approvedBy' | 'approvedAt' | 'createdAt'>;
+type ConfirmState = { id: string; period: string } | null;
 
 export function History() {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [filter, setFilter] = useState({ company: '', year: '', status: '' });
+  const [confirmDelete, setConfirmDelete] = useState<ConfirmState>(null);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     axios.get<{ success: boolean; data: { history: HistoryItem[] } }>(
@@ -31,19 +35,39 @@ export function History() {
     window.open(`/api/reconciliation/${id}/export`, '_blank');
   }
 
-  async function handleDelete(id: string, period: string) {
-    if (!window.confirm(`Delete reconciliation for ${period}? This cannot be undone.`)) return;
+  async function confirmAndDelete() {
+    if (!confirmDelete) return;
+    setDeleteError('');
     try {
-      await axios.delete(`/api/reconciliation/${id}`, { withCredentials: true });
-      setItems((prev) => prev.filter((item) => item._id !== id));
+      await axios.delete(`/api/reconciliation/${confirmDelete.id}`, { withCredentials: true });
+      setItems((prev) => prev.filter((item) => item._id !== confirmDelete.id));
+      setConfirmDelete(null);
     } catch {
-      alert('Failed to delete. Please try again.');
+      setConfirmDelete(null);
+      setDeleteError('Failed to delete. Please try again.');
     }
   }
 
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Reconciliation History</h1>
+
+      {deleteError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+          <p className="text-sm text-red-700">{deleteError}</p>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete reconciliation"
+          message={`Delete reconciliation for ${confirmDelete.period}? This cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={confirmAndDelete}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
 
       {/* Filters */}
       <div className="flex gap-3">
@@ -118,7 +142,7 @@ export function History() {
                         Download ↓
                       </button>
                       <button
-                        onClick={() => handleDelete(item._id, formatMonth(item.month, item.year))}
+                        onClick={() => setConfirmDelete({ id: item._id, period: formatMonth(item.month, item.year) })}
                         className="text-xs text-red-500 hover:text-red-700"
                       >
                         Delete
