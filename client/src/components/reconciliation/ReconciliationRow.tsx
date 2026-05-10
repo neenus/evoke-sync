@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import axios from 'axios';
 import { InvoiceRow, SessionGroup } from '../../types';
 import { formatCAD, formatDelta } from '../../utils/formatters';
+import { SearchableSelect } from '../shared/SearchableSelect';
+import { ConfirmModal } from '../shared/ConfirmModal';
 
 interface Props {
   invoice: InvoiceRow;
@@ -28,6 +30,8 @@ const ACTION_LABEL: Record<string, string> = {
   awaiting_data: '⏳ Awaiting Data',
 };
 
+type ConfirmState = { title: string; message: string; onConfirm: () => void } | null;
+
 export function ReconciliationRow({ invoice, reconciliationId, readOnly, expanded, onToggle, practitionerOptions, onUpdate, onRefresh }: Props) {
   const [excluded, setExcluded] = useState(Boolean(invoice.excluded));
   const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>(invoice.sessionGroups);
@@ -39,6 +43,8 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
   const [practitionerDraft, setPractitionerDraft] = useState(invoice.practitioner);
   const [rateDraft, setRateDraft] = useState(String(invoice.rate));
   const [notesDraft, setNotesDraft] = useState(invoice.notes);
+  const [actionError, setActionError] = useState('');
+  const [confirmState, setConfirmState] = useState<ConfirmState>(null);
 
   useEffect(() => {
     setPractitionerDraft(invoice.practitioner);
@@ -135,270 +141,297 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
     save(updated);
   }
 
-  async function handleRefetch() {
+  function handleRefetch() {
     if (readOnly) return;
-    if (!confirm('Refetch this invoice from QBO? Your session groups, notes, and exclusion status will be preserved.')) return;
-    try {
-      await axios.post(
-        `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}/refetch`,
-        {},
-        { withCredentials: true },
-      );
-      onRefresh();
-    } catch (err) {
-      const msg = axios.isAxiosError(err) ? err.response?.data?.error : 'Refetch failed';
-      alert(String(msg ?? 'Refetch failed'));
-    }
+    setConfirmState({
+      title: 'Refetch from QBO',
+      message: 'Refetch this invoice from QBO? Your session groups, notes, and exclusion status will be preserved.',
+      onConfirm: async () => {
+        setConfirmState(null);
+        setActionError('');
+        try {
+          await axios.post(
+            `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}/refetch`,
+            {},
+            { withCredentials: true },
+          );
+          onRefresh();
+        } catch (err) {
+          const msg = axios.isAxiosError(err) ? err.response?.data?.error : 'Refetch failed';
+          setActionError(String(msg ?? 'Refetch failed'));
+        }
+      },
+    });
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (readOnly) return;
-    if (!confirm('Delete this manual invoice? This cannot be undone.')) return;
-    try {
-      await axios.delete(
-        `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}`,
-        { withCredentials: true },
-      );
-      onRefresh();
-    } catch (err) {
-      const msg = axios.isAxiosError(err) ? err.response?.data?.error : 'Delete failed';
-      alert(String(msg ?? 'Delete failed'));
-    }
+    setConfirmState({
+      title: 'Delete manual invoice',
+      message: 'Delete this manual invoice? This cannot be undone.',
+      onConfirm: async () => {
+        setConfirmState(null);
+        setActionError('');
+        try {
+          await axios.delete(
+            `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}`,
+            { withCredentials: true },
+          );
+          onRefresh();
+        } catch (err) {
+          const msg = axios.isAxiosError(err) ? err.response?.data?.error : 'Delete failed';
+          setActionError(String(msg ?? 'Delete failed'));
+        }
+      },
+    });
   }
 
   const actionStyle = ACTION_STYLE[invoice.action] ?? ACTION_STYLE.awaiting_data;
   const deltaStyle = invoice.delta > 0 ? 'text-orange-600' : invoice.delta < 0 ? 'text-red-600' : 'text-gray-500';
 
   return (
-    <div className={`border rounded-lg ${excluded ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-200 bg-white'}`}>
-      <div
-        className="flex items-center px-4 py-3 cursor-pointer hover:bg-gray-100"
-        onClick={onToggle}
-      >
-        <div className="flex-1 grid grid-cols-6 gap-2 text-sm">
-          <span className={`font-medium col-span-2 ${excluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-            {invoice.clientName}
-            {invoice.notes && (
-              <span title="Has notes" className="text-xs text-blue-500 ml-2">📝</span>
-            )}
-            {invoice.isManual && (
-              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-semibold align-middle">
-                Manual
+    <>
+      {confirmState && (
+        <ConfirmModal
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.title.startsWith('Delete') ? 'Delete' : 'Refetch'}
+          danger={confirmState.title.startsWith('Delete')}
+          onConfirm={confirmState.onConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
+
+      <div className={`border rounded-lg ${excluded ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-200 bg-white'}`}>
+        <div
+          className="flex items-center px-4 py-3 cursor-pointer hover:bg-gray-100"
+          onClick={onToggle}
+        >
+          <div className="flex-1 grid grid-cols-6 gap-2 text-sm">
+            <span className={`font-medium col-span-2 ${excluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+              {invoice.clientName}
+              {invoice.notes && (
+                <span title="Has notes" className="text-xs text-blue-500 ml-2">📝</span>
+              )}
+              {invoice.isManual && (
+                <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-semibold align-middle">
+                  Manual
+                </span>
+              )}
+            </span>
+            <span className="text-gray-500 text-xs">{invoice.serviceType}</span>
+            <span className="text-gray-600">
+              {invoice.hoursBilled}h → {invoice.actualHours}h
+            </span>
+            <span className={`font-medium ${excluded ? 'text-gray-400' : deltaStyle}`}>
+              {excluded ? '—' : formatDelta(invoice.delta)}
+            </span>
+            {excluded ? (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-200 text-gray-500">
+                ⊘ Excluded
+              </span>
+            ) : (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${actionStyle}`}>
+                {ACTION_LABEL[invoice.action]}
               </span>
             )}
-          </span>
-          <span className="text-gray-500 text-xs">{invoice.serviceType}</span>
-          <span className="text-gray-600">
-            {invoice.hoursBilled}h → {invoice.actualHours}h
-          </span>
-          <span className={`font-medium ${excluded ? 'text-gray-400' : deltaStyle}`}>
-            {excluded ? '—' : formatDelta(invoice.delta)}
-          </span>
-          {excluded ? (
-            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-200 text-gray-500">
-              ⊘ Excluded
-            </span>
-          ) : (
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${actionStyle}`}>
-              {ACTION_LABEL[invoice.action]}
-            </span>
+          </div>
+          {!readOnly && (
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleExclude(); }}
+              className={`text-xs ml-3 shrink-0 ${excluded ? 'text-blue-500 hover:text-blue-700' : 'text-gray-400 hover:text-red-500'}`}
+            >
+              {excluded ? 'Include' : 'Exclude'}
+            </button>
           )}
+          <span className="text-gray-400 ml-2">{expanded ? '▲' : '▼'}</span>
         </div>
-        {!readOnly && (
-          <button
-            onClick={(e) => { e.stopPropagation(); toggleExclude(); }}
-            className={`text-xs ml-3 shrink-0 ${excluded ? 'text-blue-500 hover:text-blue-700' : 'text-gray-400 hover:text-red-500'}`}
-          >
-            {excluded ? 'Include' : 'Exclude'}
-          </button>
-        )}
-        <span className="text-gray-400 ml-2">{expanded ? '▲' : '▼'}</span>
-      </div>
 
-      {expanded && (
-        <div className="border-t border-gray-100 px-4 py-4 space-y-4">
-          {!invoice.isManual && !readOnly && (
-            <div className="flex justify-end">
-              <button
-                onClick={handleRefetch}
-                className="text-xs px-3 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
-              >
-                🔄 Refetch from QBO
-              </button>
-            </div>
-          )}
-          <div className="grid grid-cols-4 gap-4 text-xs text-gray-500">
-            <div>
-              Invoice #{' '}
-              <strong className="text-gray-800">
-                {invoice.isManual ? <em className="text-gray-400 font-normal">(create in QBO)</em> : invoice.invoiceNo}
-              </strong>
-            </div>
-            <div>Rate <strong className="text-gray-800">{formatCAD(invoice.rate)}/hr</strong></div>
-            <div>Billed <strong className="text-gray-800">{formatCAD(invoice.amountBilled)}</strong></div>
-            <div>Actual <strong className="text-gray-800">{formatCAD(invoice.actualAmount)}</strong></div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-gray-500">Practitioner</label>
-              <input
-                type="text"
-                list={`practitioners-${invoice.invoiceNo}`}
-                value={practitionerDraft}
-                disabled={readOnly}
-                onChange={(e) => setPractitionerDraft(e.target.value)}
-                onBlur={() => {
-                  if (practitionerDraft.trim() && practitionerDraft !== invoice.practitioner) {
-                    savePartial({ practitioner: practitionerDraft.trim() });
-                  }
-                }}
-                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
-              />
-              <datalist id={`practitioners-${invoice.invoiceNo}`}>
-                {practitionerOptions.map((p) => <option key={p} value={p} />)}
-              </datalist>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500">Rate ($/hr)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={rateDraft}
-                disabled={readOnly}
-                onChange={(e) => setRateDraft(e.target.value)}
-                onBlur={() => {
-                  const n = parseFloat(rateDraft);
-                  if (!Number.isNaN(n) && n >= 0 && n !== invoice.rate) {
-                    savePartial({ rate: n });
-                  }
-                }}
-                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
-              />
-            </div>
-          </div>
-
-          {invoice.description && (
-            <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-              <p className="text-xs font-semibold text-blue-700 mb-1">QBO Description</p>
-              <p className="text-xs text-gray-700 whitespace-pre-line">{invoice.description}</p>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-gray-600 uppercase">Session Groups</p>
-              {!readOnly && (
+        {expanded && (
+          <div className="border-t border-gray-100 px-4 py-4 space-y-4">
+            {!invoice.isManual && !readOnly && (
+              <div className="flex justify-end">
                 <button
-                  onClick={addGroup}
-                  className="text-xs text-blue-600 hover:text-blue-800"
+                  onClick={handleRefetch}
+                  className="text-xs px-3 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
                 >
-                  + Add Group
+                  🔄 Refetch from QBO
                 </button>
-              )}
+              </div>
+            )}
+            <div className="grid grid-cols-4 gap-4 text-xs text-gray-500">
+              <div>
+                Invoice #{' '}
+                <strong className="text-gray-800">
+                  {invoice.isManual ? <em className="text-gray-400 font-normal">(create in QBO)</em> : invoice.invoiceNo}
+                </strong>
+              </div>
+              <div>Rate <strong className="text-gray-800">{formatCAD(invoice.rate)}/hr</strong></div>
+              <div>Billed <strong className="text-gray-800">{formatCAD(invoice.amountBilled)}</strong></div>
+              <div>Actual <strong className="text-gray-800">{formatCAD(invoice.actualAmount)}</strong></div>
             </div>
 
-            {sessionGroups.map((sg, i) => (
-              <div key={i} className="bg-gray-50 rounded-lg p-3 space-y-2">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-gray-500">Session Length</label>
-                    <select
-                      value={sg.sessionLength}
-                      disabled={readOnly}
-                      onChange={(e) => {
-                        const updated = updateGroup(i, 'sessionLength', parseInt(e.target.value));
-                        save(updated);
-                      }}
-                      className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
-                    >
-                      {[15, 30, 40, 45, 60, 90, 120].map((min) => (
-                        <option key={min} value={min}>{min} min</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">Dates (day numbers, comma-separated)</label>
-                    <input
-                      type="text"
-                      value={rawDates[i] ?? ''}
-                      disabled={readOnly}
-                      onChange={(e) => handleDatesRawChange(i, e.target.value)}
-                      onBlur={() => handleDatesBlur(i)}
-                      className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
-                      placeholder="3, 8, 10, 24"
-                    />
-                  </div>
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-gray-500">Practitioner</label>
+                <SearchableSelect
+                  value={practitionerDraft}
+                  onChange={setPractitionerDraft}
+                  onBlur={() => {
+                    if (practitionerDraft.trim() && practitionerDraft !== invoice.practitioner) {
+                      savePartial({ practitioner: practitionerDraft.trim() });
+                    }
+                  }}
+                  options={practitionerOptions}
+                  disabled={readOnly}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Rate ($/hr)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={rateDraft}
+                  disabled={readOnly}
+                  onChange={(e) => setRateDraft(e.target.value)}
+                  onBlur={() => {
+                    const n = parseFloat(rateDraft);
+                    if (!Number.isNaN(n) && n >= 0 && n !== invoice.rate) {
+                      savePartial({ rate: n });
+                    }
+                  }}
+                  className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
+                />
+              </div>
+            </div>
 
-                {sg.qboDescription && (
-                  <div className="bg-white rounded border border-gray-200 p-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs text-gray-600 whitespace-pre-line flex-1">{sg.qboDescription}</p>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(sg.qboDescription)}
-                        className="text-xs text-blue-600 hover:text-blue-800 shrink-0"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                )}
+            {invoice.description && (
+              <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                <p className="text-xs font-semibold text-blue-700 mb-1">QBO Description</p>
+                <p className="text-xs text-gray-700 whitespace-pre-line">{invoice.description}</p>
+              </div>
+            )}
 
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-600 uppercase">Session Groups</p>
                 {!readOnly && (
                   <button
-                    onClick={() => removeGroup(i)}
-                    className="text-xs text-red-500 hover:text-red-700"
+                    onClick={addGroup}
+                    className="text-xs text-blue-600 hover:text-blue-800"
                   >
-                    Remove group
+                    + Add Group
                   </button>
                 )}
               </div>
-            ))}
 
-            {sessionGroups.length === 0 && !readOnly && (
-              <p className="text-xs text-gray-400 italic">No session groups. Click "Add Group" to start.</p>
+              {sessionGroups.map((sg, i) => (
+                <div key={i} className="bg-gray-50 rounded-lg p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500">Session Length</label>
+                      <select
+                        value={sg.sessionLength}
+                        disabled={readOnly}
+                        onChange={(e) => {
+                          const updated = updateGroup(i, 'sessionLength', parseInt(e.target.value));
+                          save(updated);
+                        }}
+                        className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
+                      >
+                        {[15, 30, 40, 45, 60, 90, 120].map((min) => (
+                          <option key={min} value={min}>{min} min</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">Dates (day numbers, comma-separated)</label>
+                      <input
+                        type="text"
+                        value={rawDates[i] ?? ''}
+                        disabled={readOnly}
+                        onChange={(e) => handleDatesRawChange(i, e.target.value)}
+                        onBlur={() => handleDatesBlur(i)}
+                        className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
+                        placeholder="3, 8, 10, 24"
+                      />
+                    </div>
+                  </div>
+
+                  {sg.qboDescription && (
+                    <div className="bg-white rounded border border-gray-200 p-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs text-gray-600 whitespace-pre-line flex-1">{sg.qboDescription}</p>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(sg.qboDescription)}
+                          className="text-xs text-blue-600 hover:text-blue-800 shrink-0"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!readOnly && (
+                    <button
+                      onClick={() => removeGroup(i)}
+                      className="text-xs text-red-500 hover:text-red-700"
+                    >
+                      Remove group
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {sessionGroups.length === 0 && !readOnly && (
+                <p className="text-xs text-gray-400 italic">No session groups. Click "Add Group" to start.</p>
+              )}
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-500">Notes (private — not synced to QBO)</label>
+              <textarea
+                value={notesDraft}
+                disabled={readOnly}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                onBlur={() => {
+                  if (notesDraft !== invoice.notes) savePartial({ notes: notesDraft });
+                }}
+                rows={3}
+                className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
+                placeholder="Optional notes for your reference"
+              />
+            </div>
+
+            {saving && <p className="text-xs text-blue-500">Saving…</p>}
+
+            {actionError && (
+              <p className="text-xs text-red-600 bg-red-50 rounded px-2 py-1">{actionError}</p>
+            )}
+
+            {invoice.parseWarnings.length > 0 && (
+              <div className="space-y-1">
+                {invoice.parseWarnings.map((w, i) => (
+                  <p key={i} className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1">{w}</p>
+                ))}
+              </div>
+            )}
+
+            {invoice.isManual && !readOnly && (
+              <div className="pt-2 border-t border-gray-100">
+                <button
+                  onClick={handleDelete}
+                  className="text-xs text-red-600 hover:text-red-800"
+                >
+                  Delete manual invoice
+                </button>
+              </div>
             )}
           </div>
-
-          <div>
-            <label className="text-xs text-gray-500">Notes (private — not synced to QBO)</label>
-            <textarea
-              value={notesDraft}
-              disabled={readOnly}
-              onChange={(e) => setNotesDraft(e.target.value)}
-              onBlur={() => {
-                if (notesDraft !== invoice.notes) savePartial({ notes: notesDraft });
-              }}
-              rows={3}
-              className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
-              placeholder="Optional notes for your reference"
-            />
-          </div>
-
-          {saving && <p className="text-xs text-blue-500">Saving…</p>}
-
-          {invoice.parseWarnings.length > 0 && (
-            <div className="space-y-1">
-              {invoice.parseWarnings.map((w, i) => (
-                <p key={i} className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1">{w}</p>
-              ))}
-            </div>
-          )}
-
-          {invoice.isManual && !readOnly && (
-            <div className="pt-2 border-t border-gray-100">
-              <button
-                onClick={handleDelete}
-                className="text-xs text-red-600 hover:text-red-800"
-              >
-                Delete manual invoice
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuthContext } from '../context/AuthContext';
+import { ConfirmModal } from '../components/shared/ConfirmModal';
 
 interface QBOStatus {
   connected: boolean;
@@ -14,6 +15,7 @@ export function Settings() {
   const [searchParams] = useSearchParams();
   const [qboStatus, setQboStatus] = useState<{ york_region: QBOStatus; consulting: QBOStatus } | null>(null);
   const [qboConnectedMsg, setQboConnectedMsg] = useState('');
+  const [disconnectTarget, setDisconnectTarget] = useState<string | null>(null);
 
   useEffect(() => {
     const connected = searchParams.get('qbo_connected');
@@ -36,14 +38,25 @@ export function Settings() {
   }
 
   async function disconnectCompany(company: string) {
-    if (!window.confirm(`Disconnect ${company === 'york_region' ? 'York Region' : 'Consulting'}?`)) return;
     await axios.post(`/api/auth/qbo/disconnect/${company}`, {}, { withCredentials: true });
     setQboStatus((prev) => prev ? { ...prev, [company]: { connected: false } } : prev);
+    setDisconnectTarget(null);
   }
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-4 space-y-8">
       <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+
+      {disconnectTarget && (
+        <ConfirmModal
+          title="Disconnect QBO"
+          message={`Disconnect ${disconnectTarget === 'york_region' ? 'York Region' : 'Consulting'} from QuickBooks Online?`}
+          confirmLabel="Disconnect"
+          danger
+          onConfirm={() => disconnectCompany(disconnectTarget)}
+          onCancel={() => setDisconnectTarget(null)}
+        />
+      )}
 
       {qboConnectedMsg && (
         <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
@@ -77,7 +90,7 @@ export function Settings() {
                 </button>
                 {status?.connected && (
                   <button
-                    onClick={() => disconnectCompany(co)}
+                    onClick={() => setDisconnectTarget(co)}
                     className="text-sm text-red-500 hover:text-red-700 border border-red-200 rounded-lg px-3 py-1"
                   >
                     Disconnect

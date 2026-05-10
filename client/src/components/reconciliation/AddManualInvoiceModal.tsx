@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import axios from 'axios';
 import { InvoiceRow } from '../../types';
+import { SearchableSelect } from '../shared/SearchableSelect';
 
 interface Props {
   reconciliationId: string;
@@ -79,19 +80,13 @@ export function AddManualInvoiceModal({
 
           <div>
             <label className="text-xs text-gray-600">Practitioner</label>
-            <input
-              type="text"
-              list="manual-practitioner-options"
+            <SearchableSelect
               value={practitioner}
-              onChange={(e) => setPractitioner(e.target.value)}
-              className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm"
-              required
+              onChange={setPractitioner}
+              options={practitionerOptions}
+              placeholder="Search or type name…"
+              className="mt-1"
             />
-            <datalist id="manual-practitioner-options">
-              {practitionerOptions.map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
           </div>
 
           <div>
