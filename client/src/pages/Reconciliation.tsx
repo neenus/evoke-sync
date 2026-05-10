@@ -242,6 +242,7 @@ export function Reconciliation() {
                     onToggle={() => setExpandedInvoiceNo((prev) => (prev === inv.invoiceNo ? null : inv.invoiceNo))}
                     practitionerOptions={practitionerOptions}
                     onUpdate={handleInvoiceUpdate}
+                    onRefresh={refreshReconciliation}
                   />
                 ))}
               </div>
