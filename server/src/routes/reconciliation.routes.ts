@@ -300,6 +300,28 @@ router.patch(
   }),
 );
 
+// ─── DELETE /api/reconciliation/:id/invoice/:invoiceNo (manual only) ─────────
+
+router.delete(
+  '/:id/invoice/:invoiceNo',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const doc = await ReconciliationMonth.findById(req.params.id);
+    if (!doc) throw createError('Reconciliation not found', 404);
+    if (isApproved(doc.status)) throw createError('Approved reconciliations are locked', 403);
+
+    const idx = doc.invoices.findIndex((inv) => inv.invoiceNo === req.params.invoiceNo);
+    if (idx === -1) throw createError(`Invoice ${req.params.invoiceNo} not found`, 404);
+    if (!doc.invoices[idx].isManual) {
+      throw createError('Only manual invoices can be deleted; QBO invoices can be excluded', 400);
+    }
+
+    doc.invoices.splice(idx, 1);
+    await doc.save();
+
+    res.json({ success: true });
+  }),
+);
+
 // ─── DELETE /api/reconciliation/:id ──────────────────────────────────────────
 
 router.delete(

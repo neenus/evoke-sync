@@ -5,6 +5,7 @@ import { app } from '../../app';
 import { authCookie, makeInvoice, makeReconciliation } from '../../__tests__/helpers';
 import { qboService } from '../../services/qbo.service';
 import { QBOToken } from '../../models/QBOToken.model';
+import { ReconciliationMonth } from '../../models/ReconciliationMonth.model';
 
 async function seedToken() {
   return QBOToken.create({
@@ -206,5 +207,43 @@ describe('POST /api/reconciliation/:id/invoice/:invoiceNo/refetch', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/QBO not connected/i);
+  });
+});
+
+describe('DELETE /api/reconciliation/:id/invoice/:invoiceNo', () => {
+  it('deletes a manual invoice and returns 200', async () => {
+    const doc = await makeReconciliation([
+      makeInvoice({ invoiceNo: 'MANUAL-1', isManual: true }),
+      makeInvoice({ invoiceNo: '1001', isManual: false }),
+    ]);
+
+    const res = await request(app)
+      .delete(`/api/reconciliation/${doc.id}/invoice/MANUAL-1`)
+      .set('Cookie', authCookie());
+
+    expect(res.status).toBe(200);
+    const refreshed = await ReconciliationMonth.findById(doc.id);
+    expect(refreshed?.invoices.find((i) => i.invoiceNo === 'MANUAL-1')).toBeUndefined();
+    expect(refreshed?.invoices.find((i) => i.invoiceNo === '1001')).toBeDefined();
+  });
+
+  it('returns 400 when called on a non-manual invoice', async () => {
+    const doc = await makeReconciliation([makeInvoice({ invoiceNo: '1001', isManual: false })]);
+
+    const res = await request(app)
+      .delete(`/api/reconciliation/${doc.id}/invoice/1001`)
+      .set('Cookie', authCookie());
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 403 on approved reconciliation', async () => {
+    const doc = await makeReconciliation([makeInvoice({ invoiceNo: 'MANUAL-1', isManual: true })], 'approved');
+
+    const res = await request(app)
+      .delete(`/api/reconciliation/${doc.id}/invoice/MANUAL-1`)
+      .set('Cookie', authCookie());
+
+    expect(res.status).toBe(403);
   });
 });
