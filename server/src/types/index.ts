@@ -91,6 +91,8 @@ export interface InvoiceRow {
   notes: string;
   excluded: boolean;
   description: string;
+  isManual: boolean;
+  practitionerOverridden: boolean;
 }
 
 // ─── Request extensions ───────────────────────────────────────────────────────
