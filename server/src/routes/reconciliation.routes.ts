@@ -6,7 +6,11 @@ import { requireAuth } from '../middleware/auth.middleware';
 import { ReconciliationMonth, IInvoiceRow } from '../models/ReconciliationMonth.model';
 import { QBOToken } from '../models/QBOToken.model';
 import { qboService } from '../services/qbo.service';
-import { recalcInvoice, createManualInvoice } from '../services/reconciliation.service';
+import {
+  recalcInvoice,
+  createManualInvoice,
+  refetchInvoiceFromQBO,
+} from '../services/reconciliation.service';
 import { ApprovalRecord } from '../models/ApprovalRecord.model';
 import { generateReconciliationExcel } from '../services/excelExport.service';
 import { env } from '../config/env';
@@ -216,6 +220,31 @@ router.post(
     });
 
     res.status(201).json({ success: true, data: { approval: record } });
+  }),
+);
+
+// ─── POST /api/reconciliation/:id/invoice/:invoiceNo/refetch ─────────────────
+
+router.post(
+  '/:id/invoice/:invoiceNo/refetch',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const doc = await ReconciliationMonth.findById(req.params.id);
+    if (!doc) throw createError('Reconciliation not found', 404);
+    if (isApproved(doc.status)) throw createError('Approved reconciliations are locked', 403);
+
+    const invoice = doc.invoices.find((inv) => inv.invoiceNo === req.params.invoiceNo);
+    if (!invoice) throw createError(`Invoice ${req.params.invoiceNo} not found`, 404);
+    if (invoice.isManual) throw createError('Cannot refetch a manual invoice from QBO', 400);
+
+    const tokenDoc = await QBOToken.findByCompany(doc.company as Company);
+    if (!tokenDoc) {
+      throw createError(`QBO not connected for ${doc.company} — connect it in Settings`, 400);
+    }
+
+    const updated = await refetchInvoiceFromQBO(doc, req.params.invoiceNo, tokenDoc, env.DEFAULT_SUPERVISOR);
+    await doc.save();
+
+    res.json({ success: true, data: { invoice: updated } });
   }),
 );
 
