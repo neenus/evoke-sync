@@ -7,6 +7,8 @@ interface Props {
   invoice: InvoiceRow;
   reconciliationId: string;
   readOnly: boolean;
+  expanded: boolean;
+  onToggle: () => void;
   onUpdate: (updated: InvoiceRow) => void;
 }
 
@@ -24,8 +26,7 @@ const ACTION_LABEL: Record<string, string> = {
   awaiting_data: '⏳ Awaiting Data',
 };
 
-export function ReconciliationRow({ invoice, reconciliationId, readOnly, onUpdate }: Props) {
-  const [expanded, setExpanded] = useState(false);
+export function ReconciliationRow({ invoice, reconciliationId, readOnly, expanded, onToggle, onUpdate }: Props) {
   const [excluded, setExcluded] = useState(Boolean(invoice.excluded));
   const [sessionGroups, setSessionGroups] = useState<SessionGroup[]>(invoice.sessionGroups);
   const [rawDates, setRawDates] = useState<string[]>(() =>
@@ -109,7 +110,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, onUpdat
     <div className={`border rounded-lg ${excluded ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-200 bg-white'}`}>
       <div
         className="flex items-center px-4 py-3 cursor-pointer hover:bg-gray-100"
-        onClick={() => setExpanded(!expanded)}
+        onClick={onToggle}
       >
         <div className="flex-1 grid grid-cols-6 gap-2 text-sm">
           <span className={`font-medium col-span-2 ${excluded ? 'line-through text-gray-400' : 'text-gray-900'}`}>

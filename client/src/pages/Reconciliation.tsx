@@ -23,6 +23,7 @@ export function Reconciliation() {
   const [pullError, setPullError] = useState('');
   const [reconciliation, setReconciliation] = useState<ReconciliationMonth | null>(null);
   const [loadingExisting, setLoadingExisting] = useState(isResume);
+  const [expandedInvoiceNo, setExpandedInvoiceNo] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -233,6 +234,8 @@ export function Reconciliation() {
                     invoice={inv}
                     reconciliationId={reconciliation._id}
                     readOnly={isApproved}
+                    expanded={expandedInvoiceNo === inv.invoiceNo}
+                    onToggle={() => setExpandedInvoiceNo((prev) => (prev === inv.invoiceNo ? null : inv.invoiceNo))}
                     onUpdate={handleInvoiceUpdate}
                   />
                 ))}
