@@ -4,18 +4,35 @@ import { generateDescription } from './descriptionGenerator.service';
 
 export interface RecalcInput {
   invoice: IInvoiceRow;
-  sessionGroups: SessionGroup[];
+  sessionGroups?: SessionGroup[];
+  practitioner?: string;
+  rate?: number;
   supervisorDetails: string;
   month: string;
 }
 
 export function recalcInvoice(input: RecalcInput): void {
-  const { invoice, sessionGroups, supervisorDetails, month } = input;
+  const { invoice, sessionGroups, practitioner, rate, supervisorDetails, month } = input;
 
-  invoice.sessionGroups = sessionGroups.map((sg) => ({
-    sessionLength: sg.sessionLength,
-    sessionDates: [...sg.sessionDates].sort((a, b) => parseInt(a) - parseInt(b)),
-    qboDescription: invoice.isInsurance
+  if (practitioner !== undefined) {
+    invoice.practitioner = practitioner;
+    invoice.practitionerOverridden = true;
+  }
+
+  if (rate !== undefined) {
+    invoice.rate = rate;
+  }
+
+  if (sessionGroups !== undefined) {
+    invoice.sessionGroups = sessionGroups.map((sg) => ({
+      sessionLength: sg.sessionLength,
+      sessionDates: [...sg.sessionDates].sort((a, b) => parseInt(a) - parseInt(b)),
+      qboDescription: '',
+    })) as ISessionGroup[];
+  }
+
+  for (const sg of invoice.sessionGroups) {
+    sg.qboDescription = invoice.isInsurance
       ? generateDescription({
           serviceType: invoice.serviceType,
           practitionerName: invoice.practitioner,
@@ -24,8 +41,8 @@ export function recalcInvoice(input: RecalcInput): void {
           sessionDates: sg.sessionDates,
           month,
         })
-      : '',
-  })) as ISessionGroup[];
+      : '';
+  }
 
   const actualHours = invoice.sessionGroups.reduce((sum, sg) => {
     return sum + (sg.sessionLength / 60) * sg.sessionDates.length;
