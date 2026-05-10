@@ -248,29 +248,31 @@ function buildPractitionerSheet(
 function buildSummarySheet(
   wb: ExcelJS.Workbook,
   doc: IReconciliationMonthDocument,
+  invoices: IInvoiceRow[],
   supervisorDetails: string,
 ): void {
   const ws = wb.addWorksheet('✅ SUMMARY');
-  const colWidths = [22, 22, 10, 8, 10, 10, 10, 18];
+  const colWidths = [22, 10, 22, 10, 8, 10, 10, 10, 18];
   colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
   const titleRow = ws.addRow([`${doc.month} ${doc.year} — Reconciliation Summary`]);
-  ws.mergeCells(`A${titleRow.number}:H${titleRow.number}`);
+  ws.mergeCells(`A${titleRow.number}:I${titleRow.number}`);
   titleRow.getCell(1).fill = fill(COLORS.darkBlue);
   titleRow.getCell(1).font = font(COLORS.white, true, 14);
   titleRow.height = 30;
 
-  const cols = ['Practitioner', 'Client', 'Service Type', 'Rate', 'Amt Billed', 'Actual Amt', 'Delta', 'Action'];
+  const cols = ['Practitioner', 'Invoice #', 'Client', 'Service Type', 'Rate', 'Amt Billed', 'Actual Amt', 'Delta', 'Action'];
   const hRow = ws.addRow(cols);
   cols.forEach((_, i) => headerCell(hRow, i + 1, cols[i], 'midBlue'));
 
   let grandBilled = 0;
   let grandActual = 0;
 
-  for (const inv of doc.invoices) {
+  for (const inv of invoices) {
     const { bg, text } = actionColors(inv.action);
     const r = ws.addRow([
       inv.practitioner,
+      inv.invoiceNo,
       inv.clientName,
       inv.serviceType,
       cad(inv.rate),
@@ -280,10 +282,10 @@ function buildSummarySheet(
       actionLabel(inv.action),
     ]);
 
-    for (let c = 1; c <= 8; c++) {
+    for (let c = 1; c <= 9; c++) {
       const cell = r.getCell(c);
-      cell.fill = fill(c === 8 ? COLORS[bg] : COLORS.paleBlue);
-      cell.font = font(c === 8 ? COLORS[text] : COLORS.black, c === 8);
+      cell.fill = fill(c === 9 ? COLORS[bg] : COLORS.paleBlue);
+      cell.font = font(c === 9 ? COLORS[text] : COLORS.black, c === 9);
       cell.alignment = { vertical: 'middle' };
       cell.border = border();
     }
@@ -294,12 +296,12 @@ function buildSummarySheet(
 
   const grandDelta = Math.round((grandActual - grandBilled) * 100) / 100;
   const totRow = ws.addRow([
-    'GRAND TOTAL', '', '', '',
+    'GRAND TOTAL', '', '', '', '',
     cad(Math.round(grandBilled * 100) / 100),
     cad(Math.round(grandActual * 100) / 100),
     cad(grandDelta), '',
   ]);
-  for (let c = 1; c <= 8; c++) {
+  for (let c = 1; c <= 9; c++) {
     totRow.getCell(c).fill = fill(COLORS.lightBlue);
     totRow.getCell(c).font = font(COLORS.darkBlue, true);
     totRow.getCell(c).border = border();
@@ -327,9 +329,10 @@ export async function generateReconciliationExcel(
   buildInstructionsSheet(wb);
   buildNotesSheet(wb, doc);
 
-  // Group invoices by practitioner
+  // Group invoices by practitioner — excluded invoices are omitted from the export
+  const activeInvoices = doc.invoices.filter((inv) => !inv.excluded);
   const byPractitioner = new Map<string, IInvoiceRow[]>();
-  for (const inv of doc.invoices) {
+  for (const inv of activeInvoices) {
     if (!byPractitioner.has(inv.practitioner)) {
       byPractitioner.set(inv.practitioner, []);
     }
@@ -340,7 +343,7 @@ export async function generateReconciliationExcel(
     buildPractitionerSheet(wb, practitioner, invoices);
   }
 
-  buildSummarySheet(wb, doc, supervisorDetails);
+  buildSummarySheet(wb, doc, activeInvoices, supervisorDetails);
 
   const buffer = await wb.xlsx.writeBuffer();
   return Buffer.from(buffer);
