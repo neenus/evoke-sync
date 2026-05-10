@@ -138,8 +138,10 @@ class QBOService {
   // ─── Normalize QBO Invoice → InvoiceRow ──────────────────────────────────────
 
   private normalizeInvoice(inv: QBOInvoice): InvoiceRow {
-    const lineDescriptions = inv.Line.map((l) => l.Description ?? '').join(' ');
-    const allText = `${inv.CustomerMemo?.value ?? ''} ${lineDescriptions}`;
+    const memo = inv.CustomerMemo?.value?.trim() ?? '';
+    const lineDescs = inv.Line.map((l) => (l.Description ?? '').trim()).filter(Boolean);
+    const description = [memo, ...lineDescs].filter(Boolean).join('\n');
+    const allText = description;
 
     const mainLine = inv.Line.find((l) => l.Amount > 0 && l.SalesItemLineDetail);
     const rate = mainLine?.SalesItemLineDetail?.UnitPrice ?? 0;
@@ -162,6 +164,8 @@ class QBOService {
       sessionGroups: [],
       parseWarnings: [],
       notes: '',
+      excluded: false,
+      description,
     };
   }
 }
