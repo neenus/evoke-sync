@@ -37,8 +37,10 @@ const invoiceUpdateSchema = z.object({
       sessionLength: z.number(),
       sessionDates: z.array(z.string()),
     }),
-  ),
+  ).optional(),
   notes: z.string().optional(),
+  practitioner: z.string().min(1).optional(),
+  rate: z.number().nonnegative().optional(),
 });
 
 function isApproved(status: string): boolean {
@@ -203,13 +205,15 @@ router.patch(
     const invoice = doc.invoices.find((inv) => inv.invoiceNo === req.params.invoiceNo);
     if (!invoice) throw createError(`Invoice ${req.params.invoiceNo} not found`, 404);
 
-    const { sessionGroups, notes } = result.data;
+    const { sessionGroups, notes, practitioner, rate } = result.data;
 
     if (notes !== undefined) invoice.notes = notes;
 
     recalcInvoice({
       invoice,
-      sessionGroups: sessionGroups as SessionGroup[],
+      sessionGroups: sessionGroups as SessionGroup[] | undefined,
+      practitioner,
+      rate,
       supervisorDetails: env.DEFAULT_SUPERVISOR,
       month: doc.month,
     });
