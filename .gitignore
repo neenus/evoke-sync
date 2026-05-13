@@ -11,6 +11,7 @@ server/node_modules/
 # Build outputs
 client/dist/
 server/dist/
+client/.vite/
 
 # Logs
 logs/
@@ -25,6 +26,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Claude Code
+CLAUDE.md
 
 # TypeScript
 *.tsbuildinfo
