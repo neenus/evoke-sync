@@ -34,6 +34,7 @@ export function MonthSelector({ month, year, company, onChange }: Props) {
           onChange={(e) => onChange('year', e.target.value)}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
+          <option value="">Select year…</option>
           {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
@@ -44,6 +45,7 @@ export function MonthSelector({ month, year, company, onChange }: Props) {
           onChange={(e) => onChange('company', e.target.value)}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
+          <option value="">Select company…</option>
           <option value="york_region">York Region</option>
           <option value="consulting">Consulting</option>
         </select>

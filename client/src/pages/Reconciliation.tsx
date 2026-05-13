@@ -20,7 +20,7 @@ export function Reconciliation() {
   const isResume = Boolean(id);
 
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({ month: 'March', year: String(new Date().getFullYear()), company: 'york_region' });
+  const [form, setForm] = useState({ month: '', year: '', company: '' });
   const [pulling, setPulling] = useState(false);
   const [pullError, setPullError] = useState('');
   const [reconciliation, setReconciliation] = useState<ReconciliationMonth | null>(null);
@@ -155,7 +155,7 @@ export function Reconciliation() {
           {pullError && <p className="text-sm text-red-600">{pullError}</p>}
           <button
             onClick={handlePullInvoices}
-            disabled={pulling || !form.month || !form.year}
+            disabled={pulling || !form.month || !form.year || !form.company}
             className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             {pulling ? 'Pulling invoices from QBO…' : 'Pull Invoices from QBO'}
