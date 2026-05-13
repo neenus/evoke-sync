@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
+import logoUrl from '../../assets/logo.svg';
 import { useAuthContext } from '../../context/AuthContext';
 
 export function Navbar() {
@@ -11,9 +12,9 @@ export function Navbar() {
   }
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-      <Link to="/" className="text-lg font-semibold text-blue-700">
-        Evoke Sync
+    <header className="bg-white border-b border-gray-200 px-6 py-2 flex items-center justify-between">
+      <Link to="/">
+        <img src={logoUrl} alt="Evoke Sync" className="h-12 w-auto" />
       </Link>
       <nav className="flex items-center gap-6">
         <Link to="/" className="text-sm text-gray-600 hover:text-blue-600">Dashboard</Link>
