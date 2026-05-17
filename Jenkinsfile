@@ -24,13 +24,13 @@ pipeline {
           sh 'docker info > /dev/null 2>&1 || { echo "ERROR: Docker not accessible. Mount /var/run/docker.sock into Jenkins container."; exit 1; }'
 
           // Verify the registry is reachable
-          sh "curl -sf http://${REGISTRY_URL}/v2/ > /dev/null || { echo 'ERROR: Registry at ${REGISTRY_URL} is not reachable. Check insecure-registries config.'; exit 1; }"
+          sh 'curl -sf http://${REGISTRY_URL}/v2/ > /dev/null || { echo "ERROR: Registry at ${REGISTRY_URL} is not reachable. Check insecure-registries config."; exit 1; }'
 
           // Verify .env exists in deploy dir
-          sh "test -f ${DEPLOY_DIR}/.env || { echo 'ERROR: ${DEPLOY_DIR}/.env not found. Create it on the NAS before running the pipeline.'; exit 1; }"
+          sh 'test -f ${DEPLOY_DIR}/.env || { echo "ERROR: ${DEPLOY_DIR}/.env not found. Create it on the NAS before running the pipeline."; exit 1; }'
 
           // Verify docker compose is available
-          sh "docker compose version > /dev/null 2>&1 || { echo 'ERROR: docker compose plugin not found.'; exit 1; }"
+          sh 'docker compose version > /dev/null 2>&1 || { echo "ERROR: docker compose plugin not found."; exit 1; }'
         }
       }
     }
@@ -46,12 +46,12 @@ pipeline {
       parallel {
         stage('Build Server') {
           steps {
-            sh "docker build -f Dockerfile.server -t ${SERVER_IMAGE}:${IMAGE_TAG} -t ${SERVER_IMAGE}:latest ."
+            sh 'docker build -f Dockerfile.server -t ${SERVER_IMAGE}:${IMAGE_TAG} -t ${SERVER_IMAGE}:latest .'
           }
         }
         stage('Build Client') {
           steps {
-            sh "docker build -f Dockerfile.client -t ${CLIENT_IMAGE}:${IMAGE_TAG} -t ${CLIENT_IMAGE}:latest ."
+            sh 'docker build -f Dockerfile.client -t ${CLIENT_IMAGE}:${IMAGE_TAG} -t ${CLIENT_IMAGE}:latest .'
           }
         }
       }
@@ -59,10 +59,10 @@ pipeline {
 
     stage('Push to Registry') {
       steps {
-        sh "docker push ${SERVER_IMAGE}:${IMAGE_TAG}"
-        sh "docker push ${SERVER_IMAGE}:latest"
-        sh "docker push ${CLIENT_IMAGE}:${IMAGE_TAG}"
-        sh "docker push ${CLIENT_IMAGE}:latest"
+        sh 'docker push ${SERVER_IMAGE}:${IMAGE_TAG}'
+        sh 'docker push ${SERVER_IMAGE}:latest'
+        sh 'docker push ${CLIENT_IMAGE}:${IMAGE_TAG}'
+        sh 'docker push ${CLIENT_IMAGE}:latest'
       }
     }
 
@@ -70,7 +70,7 @@ pipeline {
       steps {
         script {
           // Copy the compose file to the deploy directory
-          sh "cp ${COMPOSE_FILE} ${DEPLOY_DIR}/${COMPOSE_FILE}"
+          sh 'cp ${COMPOSE_FILE} ${DEPLOY_DIR}/${COMPOSE_FILE}'
 
           // Pull new images and restart only app containers (mongo is left running to preserve data)
           sh """
@@ -105,7 +105,8 @@ pipeline {
         echo "Build ${IMAGE_TAG} failed. Rolling back to previous images..."
         sh """
           cd ${DEPLOY_DIR}
-          REGISTRY_URL=${REGISTRY_URL} IMAGE_TAG=latest docker compose -f ${COMPOSE_FILE} up -d --no-deps server client || true
+          REGISTRY_URL=${REGISTRY_URL} IMAGE_TAG=latest docker compose -f ${COMPOSE_FILE} \
+            up -d --no-deps server client || true
         """
       }
     }
