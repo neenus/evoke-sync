@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import logoUrl from '../../assets/logo.svg';
+const logoUrl = new URL('../../assets/logo.svg', import.meta.url).href;
 import { useAuthContext } from '../../context/AuthContext';
 
 export function Navbar() {
