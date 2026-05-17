@@ -17,7 +17,6 @@ pipeline {
   }
 
   stages {
-
     stage('Preflight') {
       steps {
         script {
@@ -95,7 +94,6 @@ pipeline {
         }
       }
     }
-
   }
 
   post {
@@ -118,7 +116,11 @@ pipeline {
         // Keep only the last 3 tagged builds in the registry (best-effort)
         sh """
           for image in ${SERVER_IMAGE} ${CLIENT_IMAGE}; do
-            docker images "\$image" --format '{{.Tag}}' | grep -E '^[0-9]+$' | sort -n | head -n -3 | xargs -r -I{} docker rmi "\$image:{}" || true
+            docker images "\$image" --format '{{.Tag}}' \
+              | grep -E '^[0-9]+\$' \
+              | sort -n \
+              | head -n -3 \
+              | xargs -r -I{} docker rmi "\$image:{}" || true
           done
         """
       }
