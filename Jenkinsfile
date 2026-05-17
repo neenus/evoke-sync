@@ -6,7 +6,7 @@ pipeline {
     IMAGE_TAG       = "${env.BUILD_NUMBER}"
     SERVER_IMAGE    = "${REGISTRY_URL}/evoke-sync-server"
     CLIENT_IMAGE    = "${REGISTRY_URL}/evoke-sync-client"
-    DEPLOY_DIR      = '/volume1/evoke-sync'
+    DEPLOY_DIR      = '/volume1/docker/evoke-sync'
     COMPOSE_FILE    = 'docker-compose.prod.yml'
   }
 
