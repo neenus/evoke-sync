@@ -9,6 +9,8 @@ services:
       MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
     volumes:
       - mongo_data:/data/db
+    ports:
+      - "27005:27017"
     networks:
       - evoke-net
     healthcheck:
