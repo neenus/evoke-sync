@@ -54,3 +54,6 @@ volumes:
 networks:
   evoke-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.100.0/24
