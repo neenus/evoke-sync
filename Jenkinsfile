@@ -75,7 +75,7 @@ pipeline {
         script {
           retry(12) {
             sleep(time: 5, unit: 'SECONDS')
-            sh 'curl -sf http://localhost:5015/api/health > /dev/null || { echo "Server not ready yet..."; exit 1; }'
+            sh 'curl -sf http://192.168.4.99:5015/health > /dev/null || { echo "Server not ready yet..."; exit 1; }'
           }
           echo 'Deployment successful — server is healthy.'
         }
