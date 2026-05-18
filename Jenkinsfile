@@ -63,6 +63,7 @@ pipeline {
           sh 'cp ${COMPOSE_FILE} ${DEPLOY_DIR}/${COMPOSE_FILE}'
           sh '''
             cd ${DEPLOY_DIR}
+            docker compose -f ${COMPOSE_FILE} up -d mongo
             docker compose -f ${COMPOSE_FILE} pull server client
             docker compose -f ${COMPOSE_FILE} up -d --no-deps server client
           '''
