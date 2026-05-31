@@ -27,6 +27,10 @@ const envSchema = z.object({
 
   // Settings defaults
   DEFAULT_SUPERVISOR: z.string().default('Your Supervising Clinician Name, Credentials'),
+
+  // NR Auth integration
+  AUTH_SERVICE_URL: z.string().url('AUTH_SERVICE_URL must be a valid URL'),
+  APP_NAME: z.string().min(1, 'APP_NAME is required'),
 });
 
 const parsed = envSchema.safeParse(process.env);
