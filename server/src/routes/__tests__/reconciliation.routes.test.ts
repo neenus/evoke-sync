@@ -1,11 +1,14 @@
-import { describe, it, expect } from 'vitest';
-import { vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import { app } from '../../app';
-import { authCookie, makeInvoice, makeReconciliation } from '../../__tests__/helpers';
+import { makeInvoice, makeReconciliation } from '../../__tests__/helpers';
 import { qboService } from '../../services/qbo.service';
 import { QBOToken } from '../../models/QBOToken.model';
 import { ReconciliationMonth } from '../../models/ReconciliationMonth.model';
+
+vi.mock('@nr/auth-middleware', () => ({
+  requireAuth: (_req: any, _res: any, next: any) => next(),
+}));
 
 async function seedToken() {
   return QBOToken.create({
@@ -33,7 +36,6 @@ describe('PATCH /api/reconciliation/:id/invoice/:invoiceNo', () => {
 
     const res = await request(app)
       .patch(`/api/reconciliation/${doc.id}/invoice/1`)
-      .set('Cookie', authCookie())
       .send({ practitioner: 'New Person', sessionGroups: [{ sessionLength: 60, sessionDates: ['1', '2'] }] });
 
     expect(res.status).toBe(200);
@@ -54,7 +56,6 @@ describe('PATCH /api/reconciliation/:id/invoice/:invoiceNo', () => {
 
     const res = await request(app)
       .patch(`/api/reconciliation/${doc.id}/invoice/1`)
-      .set('Cookie', authCookie())
       .send({ rate: 150, sessionGroups: [{ sessionLength: 60, sessionDates: ['1', '2', '3', '4'] }] });
 
     expect(res.status).toBe(200);
@@ -70,7 +71,6 @@ describe('PATCH /api/reconciliation/:id/invoice/:invoiceNo', () => {
 
     const res = await request(app)
       .patch(`/api/reconciliation/${doc.id}/invoice/1`)
-      .set('Cookie', authCookie())
       .send({ rate: 200, sessionGroups: [] });
 
     expect(res.status).toBe(403);
@@ -83,7 +83,6 @@ describe('POST /api/reconciliation/:id/invoice', () => {
 
     const res = await request(app)
       .post(`/api/reconciliation/${doc.id}/invoice`)
-      .set('Cookie', authCookie())
       .send({
         clientName: 'New Student',
         practitioner: 'Jane Doe',
@@ -105,7 +104,6 @@ describe('POST /api/reconciliation/:id/invoice', () => {
 
     const res = await request(app)
       .post(`/api/reconciliation/${doc.id}/invoice`)
-      .set('Cookie', authCookie())
       .send({ clientName: 'Only This' });
 
     expect(res.status).toBe(400);
@@ -116,7 +114,6 @@ describe('POST /api/reconciliation/:id/invoice', () => {
 
     const res = await request(app)
       .post(`/api/reconciliation/${doc.id}/invoice`)
-      .set('Cookie', authCookie())
       .send({
         clientName: 'X',
         practitioner: 'Y',
@@ -146,8 +143,7 @@ describe('POST /api/reconciliation/:id/invoice/:invoiceNo/refetch', () => {
     );
 
     const res = await request(app)
-      .post(`/api/reconciliation/${doc.id}/invoice/1001/refetch`)
-      .set('Cookie', authCookie());
+      .post(`/api/reconciliation/${doc.id}/invoice/1001/refetch`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.invoice.clientName).toBe('New');
@@ -163,8 +159,7 @@ describe('POST /api/reconciliation/:id/invoice/:invoiceNo/refetch', () => {
     ]);
 
     const res = await request(app)
-      .post(`/api/reconciliation/${doc.id}/invoice/MANUAL-1/refetch`)
-      .set('Cookie', authCookie());
+      .post(`/api/reconciliation/${doc.id}/invoice/MANUAL-1/refetch`);
 
     expect(res.status).toBe(400);
   });
@@ -178,8 +173,7 @@ describe('POST /api/reconciliation/:id/invoice/:invoiceNo/refetch', () => {
     vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue(null);
 
     const res = await request(app)
-      .post(`/api/reconciliation/${doc.id}/invoice/999/refetch`)
-      .set('Cookie', authCookie());
+      .post(`/api/reconciliation/${doc.id}/invoice/999/refetch`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.invoice.excluded).toBe(true);
@@ -192,8 +186,7 @@ describe('POST /api/reconciliation/:id/invoice/:invoiceNo/refetch', () => {
     const doc = await makeReconciliation([makeInvoice({ invoiceNo: '1' })], 'approved');
 
     const res = await request(app)
-      .post(`/api/reconciliation/${doc.id}/invoice/1/refetch`)
-      .set('Cookie', authCookie());
+      .post(`/api/reconciliation/${doc.id}/invoice/1/refetch`);
 
     expect(res.status).toBe(403);
   });
@@ -202,8 +195,7 @@ describe('POST /api/reconciliation/:id/invoice/:invoiceNo/refetch', () => {
     const doc = await makeReconciliation([makeInvoice({ invoiceNo: '1' })]);
 
     const res = await request(app)
-      .post(`/api/reconciliation/${doc.id}/invoice/1/refetch`)
-      .set('Cookie', authCookie());
+      .post(`/api/reconciliation/${doc.id}/invoice/1/refetch`);
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/QBO not connected/i);
@@ -218,8 +210,7 @@ describe('DELETE /api/reconciliation/:id/invoice/:invoiceNo', () => {
     ]);
 
     const res = await request(app)
-      .delete(`/api/reconciliation/${doc.id}/invoice/MANUAL-1`)
-      .set('Cookie', authCookie());
+      .delete(`/api/reconciliation/${doc.id}/invoice/MANUAL-1`);
 
     expect(res.status).toBe(200);
     const refreshed = await ReconciliationMonth.findById(doc.id);
@@ -231,8 +222,7 @@ describe('DELETE /api/reconciliation/:id/invoice/:invoiceNo', () => {
     const doc = await makeReconciliation([makeInvoice({ invoiceNo: '1001', isManual: false })]);
 
     const res = await request(app)
-      .delete(`/api/reconciliation/${doc.id}/invoice/1001`)
-      .set('Cookie', authCookie());
+      .delete(`/api/reconciliation/${doc.id}/invoice/1001`);
 
     expect(res.status).toBe(400);
   });
@@ -241,8 +231,7 @@ describe('DELETE /api/reconciliation/:id/invoice/:invoiceNo', () => {
     const doc = await makeReconciliation([makeInvoice({ invoiceNo: 'MANUAL-1', isManual: true })], 'approved');
 
     const res = await request(app)
-      .delete(`/api/reconciliation/${doc.id}/invoice/MANUAL-1`)
-      .set('Cookie', authCookie());
+      .delete(`/api/reconciliation/${doc.id}/invoice/MANUAL-1`);
 
     expect(res.status).toBe(403);
   });

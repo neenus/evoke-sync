@@ -1,16 +1,6 @@
-import jwt from 'jsonwebtoken';
 import { Types } from 'mongoose';
 import { ReconciliationMonth, IReconciliationMonthDocument } from '../models/ReconciliationMonth.model';
 import { InvoiceRow } from '../types';
-
-export function authCookie(): string {
-  const token = jwt.sign(
-    { userId: new Types.ObjectId().toHexString(), email: 'test@example.com', role: 'admin' },
-    process.env.JWT_SECRET!,
-    { expiresIn: '1h' },
-  );
-  return `token=${token}`;
-}
 
 export function makeInvoice(overrides: Partial<InvoiceRow> = {}): InvoiceRow {
   return {
