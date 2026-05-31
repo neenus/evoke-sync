@@ -111,7 +111,7 @@ export function Settings() {
           <p className="mt-1"><span className="text-gray-400">Role:</span> {user?.role}</p>
         </div>
         <p className="text-xs text-gray-400">
-          To change your password, update ADMIN_PASSWORD in .env and restart the server.
+          To change your password, log in to the NR Auth portal and update it there.
         </p>
       </section>
     </div>
