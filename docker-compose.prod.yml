@@ -32,6 +32,7 @@ services:
         condition: service_healthy
     networks:
       - evoke-net
+      - auth_network
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
       interval: 10s
@@ -59,3 +60,5 @@ networks:
     ipam:
       config:
         - subnet: 10.10.10.0/24
+  auth_network:
+    external: true
