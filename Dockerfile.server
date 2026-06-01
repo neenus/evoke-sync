@@ -1,7 +1,9 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY server/package*.json ./
+ARG NPM_TOKEN
+COPY server/package*.json server/.npmrc ./
 RUN npm ci
+RUN rm -f .npmrc
 COPY server/ .
 RUN npm run build
 

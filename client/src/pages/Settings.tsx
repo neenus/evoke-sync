@@ -106,12 +106,12 @@ export function Settings() {
       <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
         <h2 className="text-base font-semibold text-gray-800">Account</h2>
         <div className="text-sm text-gray-700">
-          <p><span className="text-gray-400">Name:</span> {user?.name}</p>
+          <p><span className="text-gray-400">Name:</span> {user ? `${user.firstName} ${user.lastName}` : ''}</p>
           <p className="mt-1"><span className="text-gray-400">Email:</span> {user?.email}</p>
           <p className="mt-1"><span className="text-gray-400">Role:</span> {user?.role}</p>
         </div>
         <p className="text-xs text-gray-400">
-          To change your password, update ADMIN_PASSWORD in .env and restart the server.
+          To change your password, log in to the NR Auth portal and update it there.
         </p>
       </section>
     </div>

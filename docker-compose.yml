@@ -25,6 +25,7 @@ services:
       - mongo
     networks:
       - evoke-net
+      - auth_network
 
   client:
     build:
@@ -45,3 +46,8 @@ volumes:
 networks:
   evoke-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.0.0/24
+  auth_network:
+    external: true

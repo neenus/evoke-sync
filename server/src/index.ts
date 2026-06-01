@@ -6,11 +6,9 @@ loadEnv({ path: path.resolve(__dirname, '..', '..', '.env') });
 import { app } from './app';
 import { env } from './config/env';
 import { connectDB, disconnectDB } from './config/db';
-import { seedAdminUser } from './config/seed';
 
 async function bootstrap(): Promise<void> {
   await connectDB();
-  await seedAdminUser();
 
   const server = app.listen(env.PORT, env.HOST, () => {
     console.log(`\n🚀  Evoke Sync API running on http://${env.HOST}:${env.PORT}`);
