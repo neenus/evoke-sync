@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM --platform=linux/amd64 node:20-slim AS builder
 WORKDIR /app
 ARG NPM_TOKEN
 COPY server/package*.json server/.npmrc ./
@@ -7,10 +7,11 @@ RUN rm -f .npmrc
 COPY server/ .
 RUN npm run build
 
-FROM node:20-alpine
+FROM --platform=linux/amd64 node:20-slim
 WORKDIR /app
+ARG NPM_TOKEN
 COPY --from=builder /app/dist ./dist
-COPY server/package*.json ./
-RUN npm ci --omit=dev
+COPY server/package*.json server/.npmrc ./
+RUN npm ci --omit=dev && npm cache clean --force && rm -f .npmrc
 EXPOSE 5000
 CMD ["node", "dist/index.js"]
