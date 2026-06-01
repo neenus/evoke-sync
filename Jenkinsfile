@@ -37,7 +37,7 @@ pipeline {
       parallel {
         stage('Build Server') {
           steps {
-            withCredentials([string(credentialsId: 'npm-token', variable: 'NPM_TOKEN')]) {
+            withCredentials([string(credentialsId: 'npm-private-token', variable: 'NPM_TOKEN')]) {
               sh 'docker build --build-arg NPM_TOKEN=${NPM_TOKEN} -f Dockerfile.server -t ${REGISTRY_URL}/evoke-sync-server:${IMAGE_TAG} -t ${REGISTRY_URL}/evoke-sync-server:latest .'
             }
           }
