@@ -21,7 +21,7 @@ pipeline {
           sh 'docker info > /dev/null 2>&1 || { echo "ERROR: Docker not accessible. Mount /var/run/docker.sock into Jenkins container."; exit 1; }'
           sh 'curl -sf http://${REGISTRY_URL}/v2/ > /dev/null || { echo "ERROR: Registry at ${REGISTRY_URL} is not reachable. Check insecure-registries config."; exit 1; }'
           sh 'test -f ${DEPLOY_DIR}/.env || { echo "ERROR: ${DEPLOY_DIR}/.env not found. Create it on the NAS before running the pipeline."; exit 1; }'
-          sh 'docker compose version > /dev/null 2>&1 || { echo "ERROR: docker compose plugin not found."; exit 1; }'
+          sh 'docker-compose version > /dev/null 2>&1 || { echo "ERROR: docker-compose plugin not found."; exit 1; }'
         }
       }
     }
@@ -65,9 +65,9 @@ pipeline {
           sh 'cp ${COMPOSE_FILE} ${DEPLOY_DIR}/${COMPOSE_FILE}'
           sh '''
             cd ${DEPLOY_DIR}
-            docker compose -f ${COMPOSE_FILE} up -d mongo
-            docker compose -f ${COMPOSE_FILE} pull server client
-            docker compose -f ${COMPOSE_FILE} up -d --no-deps server client
+            docker-compose -f ${COMPOSE_FILE} up -d mongo
+            docker-compose -f ${COMPOSE_FILE} pull server client
+            docker-compose -f ${COMPOSE_FILE} up -d --no-deps server client
           '''
         }
       }
@@ -95,7 +95,7 @@ pipeline {
         echo "Build ${IMAGE_TAG} failed. Rolling back to previous images..."
         sh '''
           cd ${DEPLOY_DIR}
-          IMAGE_TAG=latest docker compose -f ${COMPOSE_FILE} up -d --no-deps server client || true
+          IMAGE_TAG=latest docker-compose -f ${COMPOSE_FILE} up -d --no-deps server client || true
         '''
       }
     }
