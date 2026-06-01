@@ -1,7 +1,11 @@
 export interface User {
-  name: string;
+  _id: string;
+  firstName: string;
+  lastName: string;
   email: string;
-  role: 'admin' | 'employee';
+  role: string;
+  appAccess: string[];
+  isActive: boolean;
 }
 
 export interface ApiResponse<T = unknown> {

@@ -22,7 +22,7 @@ export function Navbar() {
         <Link to="/history" className="text-sm text-gray-600 hover:text-blue-600">History</Link>
         <Link to="/settings" className="text-sm text-gray-600 hover:text-blue-600">Settings</Link>
         <div className="flex items-center gap-3 border-l pl-6">
-          <span className="text-sm text-gray-500">{user?.name}</span>
+          <span className="text-sm text-gray-500">{user ? `${user.firstName} ${user.lastName}` : ''}</span>
           <button
             onClick={handleLogout}
             className="text-sm text-red-500 hover:text-red-700"

@@ -1,4 +1,5 @@
 import { Request } from 'express';
+export type { AuthenticatedRequest } from '@nr/auth-middleware';
 
 // ─── OAuth / Token ────────────────────────────────────────────────────────────
 
@@ -95,13 +96,6 @@ export interface InvoiceRow {
   practitionerOverridden: boolean;
 }
 
-// ─── Request extensions ───────────────────────────────────────────────────────
-
-export interface AuthenticatedRequest extends Request {
-  userId?: string;
-  userEmail?: string;
-  userRole?: string;
-}
 
 // ─── API response shapes ──────────────────────────────────────────────────────
 
