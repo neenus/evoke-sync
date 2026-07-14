@@ -2,6 +2,7 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export interface IApprovalRecordDocument extends Document {
   reconciliationMonthId: Types.ObjectId;
+  action: 'approved' | 'unapproved';
   approvedBy: string;
   approvedAt: Date;
   totalBilled: number;
@@ -23,7 +24,15 @@ const approvalRecordSchema = new Schema<IApprovalRecordDocument>(
       type: Schema.Types.ObjectId,
       required: true,
       ref: 'ReconciliationMonth',
-      unique: true,
+    },
+    action: {
+      type: String,
+      enum: ['approved', 'unapproved'],
+      default: 'approved',
+    } as unknown as {
+      type: StringConstructor;
+      enum: Array<'approved' | 'unapproved'>;
+      default: 'approved';
     },
     approvedBy: { type: String, required: true },
     approvedAt: { type: Date, required: true },
