@@ -51,4 +51,34 @@ router.get(
   }),
 );
 
+// ─── GET /api/qbo/customers/:company ──────────────────────────────────────────
+
+router.get(
+  '/customers/:company',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { company } = req.params;
+    if (!isValidCompany(company)) throw createError('Invalid company', 400);
+
+    const tokenDoc = await getTokenOrThrow(company);
+    const customers = await qboService.fetchCustomerNames(tokenDoc);
+
+    res.json({ success: true, data: { customers } });
+  }),
+);
+
+// ─── GET /api/qbo/items/:company ──────────────────────────────────────────────
+
+router.get(
+  '/items/:company',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { company } = req.params;
+    if (!isValidCompany(company)) throw createError('Invalid company', 400);
+
+    const tokenDoc = await getTokenOrThrow(company);
+    const items = await qboService.fetchServiceItemNames(tokenDoc);
+
+    res.json({ success: true, data: { items } });
+  }),
+);
+
 export default router;

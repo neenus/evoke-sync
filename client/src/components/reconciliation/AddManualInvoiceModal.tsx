@@ -6,26 +6,32 @@ import { SearchableSelect } from '../shared/SearchableSelect';
 interface Props {
   reconciliationId: string;
   practitionerOptions: string[];
+  clientOptions: string[];
+  serviceOptions: string[];
+  qboOptionsError: string;
   onClose: () => void;
   onCreated: () => void;
 }
 
-const SERVICE_TYPES = [
+const FALLBACK_SERVICE_TYPES = [
   'Reading Remediation',
   'Math Remediation',
   'Executive Function Coaching',
   'Academic Strategies',
-] as const;
+];
 
 export function AddManualInvoiceModal({
   reconciliationId,
   practitionerOptions,
+  clientOptions,
+  serviceOptions,
+  qboOptionsError,
   onClose,
   onCreated,
 }: Props) {
   const [clientName, setClientName] = useState('');
   const [practitioner, setPractitioner] = useState('');
-  const [serviceType, setServiceType] = useState<string>(SERVICE_TYPES[0]);
+  const [serviceType, setServiceType] = useState('');
   const [rate, setRate] = useState('');
   const [isInsurance, setIsInsurance] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -66,15 +72,21 @@ export function AddManualInvoiceModal({
           This row is local-only — you'll still need to create the invoice in QBO.
         </p>
 
+        {qboOptionsError && (
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            {qboOptionsError}
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="text-xs text-gray-600">Client name</label>
-            <input
-              type="text"
+            <SearchableSelect
               value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm"
-              required
+              onChange={setClientName}
+              options={clientOptions}
+              placeholder="Search QBO clients…"
+              className="mt-1"
             />
           </div>
 
@@ -91,17 +103,13 @@ export function AddManualInvoiceModal({
 
           <div>
             <label className="text-xs text-gray-600">Service type</label>
-            <select
+            <SearchableSelect
               value={serviceType}
-              onChange={(e) => setServiceType(e.target.value)}
-              className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm"
-            >
-              {SERVICE_TYPES.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </select>
+              onChange={setServiceType}
+              options={serviceOptions.length > 0 ? serviceOptions : FALLBACK_SERVICE_TYPES}
+              placeholder="Search QBO services…"
+              className="mt-1"
+            />
           </div>
 
           <div>
