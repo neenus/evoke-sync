@@ -210,13 +210,7 @@ router.post(
     const { approvedBy, notes } = result.data;
     const approvedAt = new Date();
 
-    // Lock the reconciliation
-    doc.status = 'approved';
-    doc.approvedBy = approvedBy;
-    doc.approvedAt = approvedAt;
-    await doc.save();
-
-    // Build approval record
+    // Build approval record snapshot before mutating the reconciliation
     const snapshot = buildApprovalSnapshot(doc);
 
     const record = await ApprovalRecord.create({
@@ -227,6 +221,12 @@ router.post(
       ...snapshot,
       notes: notes ?? '',
     });
+
+    // Lock the reconciliation only after the audit record is durably written
+    doc.status = 'approved';
+    doc.approvedBy = approvedBy;
+    doc.approvedAt = approvedAt;
+    await doc.save();
 
     res.status(201).json({ success: true, data: { approval: record } });
   }),
@@ -241,11 +241,6 @@ router.post(
     if (!doc) throw createError('Reconciliation not found', 404);
     if (!isApproved(doc.status)) throw createError('Reconciliation is not approved', 409);
 
-    doc.status = 'in_progress';
-    doc.approvedBy = undefined;
-    doc.approvedAt = undefined;
-    await doc.save();
-
     const performedBy = `${req.user!.firstName} ${req.user!.lastName}`;
     const snapshot = buildApprovalSnapshot(doc);
 
@@ -257,6 +252,11 @@ router.post(
       ...snapshot,
       notes: '',
     });
+
+    doc.status = 'in_progress';
+    doc.approvedBy = undefined;
+    doc.approvedAt = undefined;
+    await doc.save();
 
     res.json({ success: true, data: { reconciliation: doc } });
   }),
