@@ -14,6 +14,8 @@ export function History() {
   const [filter, setFilter] = useState({ company: '', year: '', status: '' });
   const [confirmDelete, setConfirmDelete] = useState<ConfirmState>(null);
   const [deleteError, setDeleteError] = useState('');
+  const [confirmUnapprove, setConfirmUnapprove] = useState<ConfirmState>(null);
+  const [unapproveError, setUnapproveError] = useState('');
 
   useEffect(() => {
     axios.get<{ success: boolean; data: { history: HistoryItem[] } }>(
@@ -48,6 +50,29 @@ export function History() {
     }
   }
 
+  async function confirmAndUnapprove() {
+    if (!confirmUnapprove) return;
+    setUnapproveError('');
+    try {
+      const { data } = await axios.post<{ success: boolean; data: { reconciliation: ReconciliationMonth } }>(
+        `/api/reconciliation/${confirmUnapprove.id}/unapprove`,
+        {},
+        { withCredentials: true },
+      );
+      setItems((prev) =>
+        prev.map((item) =>
+          item._id === confirmUnapprove.id
+            ? { ...item, status: data.data.reconciliation.status, approvedBy: undefined, approvedAt: undefined }
+            : item,
+        ),
+      );
+      setConfirmUnapprove(null);
+    } catch {
+      setConfirmUnapprove(null);
+      setUnapproveError('Failed to unapprove. Please try again.');
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Reconciliation History</h1>
@@ -55,6 +80,12 @@ export function History() {
       {deleteError && (
         <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
           <p className="text-sm text-red-700">{deleteError}</p>
+        </div>
+      )}
+
+      {unapproveError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+          <p className="text-sm text-red-700">{unapproveError}</p>
         </div>
       )}
 
@@ -66,6 +97,17 @@ export function History() {
           danger
           onConfirm={confirmAndDelete}
           onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {confirmUnapprove && (
+        <ConfirmModal
+          title="Unapprove reconciliation"
+          message={`Unapprove reconciliation for ${confirmUnapprove.period}? It will be unlocked for editing again.`}
+          confirmLabel="Unapprove"
+          danger
+          onConfirm={confirmAndUnapprove}
+          onCancel={() => setConfirmUnapprove(null)}
         />
       )}
 
@@ -141,6 +183,14 @@ export function History() {
                       >
                         Download ↓
                       </button>
+                      {item.status === 'approved' && (
+                        <button
+                          onClick={() => setConfirmUnapprove({ id: item._id, period: formatMonth(item.month, item.year) })}
+                          className="text-xs text-amber-600 hover:text-amber-800"
+                        >
+                          Unapprove
+                        </button>
+                      )}
                       <button
                         onClick={() => setConfirmDelete({ id: item._id, period: formatMonth(item.month, item.year) })}
                         className="text-xs text-red-500 hover:text-red-700"
