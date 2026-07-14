@@ -5,9 +5,21 @@ import { makeInvoice, makeReconciliation } from '../../__tests__/helpers';
 import { qboService } from '../../services/qbo.service';
 import { QBOToken } from '../../models/QBOToken.model';
 import { ReconciliationMonth } from '../../models/ReconciliationMonth.model';
+import { ApprovalRecord } from '../../models/ApprovalRecord.model';
 
 vi.mock('@nr/auth-middleware', () => ({
-  requireAuth: (_req: any, _res: any, next: any) => next(),
+  requireAuth: (req: any, _res: any, next: any) => {
+    req.user = {
+      _id: 'user-1',
+      firstName: 'Test',
+      lastName: 'User',
+      email: 'test@example.com',
+      role: 'admin',
+      appAccess: ['evoke_sync'],
+      isActive: true,
+    };
+    next();
+  },
 }));
 
 async function seedToken() {
@@ -234,5 +246,82 @@ describe('DELETE /api/reconciliation/:id/invoice/:invoiceNo', () => {
       .delete(`/api/reconciliation/${doc.id}/invoice/MANUAL-1`);
 
     expect(res.status).toBe(403);
+  });
+});
+
+describe('POST /api/reconciliation/:id/unapprove', () => {
+  it('returns 404 when reconciliation does not exist', async () => {
+    const res = await request(app).post('/api/reconciliation/000000000000000000000000/unapprove');
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 409 when reconciliation is not approved', async () => {
+    const doc = await makeReconciliation([makeInvoice({ invoiceNo: '1' })], 'in_progress');
+
+    const res = await request(app).post(`/api/reconciliation/${doc.id}/unapprove`);
+
+    expect(res.status).toBe(409);
+  });
+
+  it('reverts status to in_progress, clears approval fields, and returns the updated doc', async () => {
+    const doc = await makeReconciliation(
+      [makeInvoice({ invoiceNo: '1', action: 'no_change' })],
+      'approved',
+    );
+    doc.approvedBy = 'Neenus';
+    doc.approvedAt = new Date();
+    await doc.save();
+
+    const res = await request(app).post(`/api/reconciliation/${doc.id}/unapprove`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.reconciliation.status).toBe('in_progress');
+    expect(res.body.data.reconciliation.approvedBy).toBeUndefined();
+    expect(res.body.data.reconciliation.approvedAt).toBeUndefined();
+
+    const refreshed = await ReconciliationMonth.findById(doc.id);
+    expect(refreshed?.status).toBe('in_progress');
+    expect(refreshed?.approvedBy).toBeUndefined();
+    expect(refreshed?.approvedAt).toBeUndefined();
+  });
+
+  it('creates an ApprovalRecord with action "unapproved" using the authenticated user\'s name', async () => {
+    const doc = await makeReconciliation(
+      [makeInvoice({ invoiceNo: '1', action: 'no_change', amountBilled: 500, actualAmount: 500 })],
+      'approved',
+    );
+
+    const res = await request(app).post(`/api/reconciliation/${doc.id}/unapprove`);
+
+    expect(res.status).toBe(200);
+    const records = await ApprovalRecord.find({ reconciliationMonthId: doc.id });
+    expect(records).toHaveLength(1);
+    expect(records[0].action).toBe('unapproved');
+    expect(records[0].approvedBy).toBe('Test User');
+    expect(records[0].totalBilled).toBe(500);
+    expect(records[0].totalActual).toBe(500);
+  });
+
+  it('preserves the prior approve record so both approve and unapprove events exist', async () => {
+    const doc = await makeReconciliation([makeInvoice({ invoiceNo: '1' })], 'approved');
+    await ApprovalRecord.create({
+      reconciliationMonthId: doc.id,
+      action: 'approved',
+      approvedBy: 'Neenus',
+      approvedAt: new Date(),
+      totalBilled: 100,
+      totalActual: 100,
+      totalDelta: 0,
+      actionsRequired: { additionalCharges: 0, creditMemos: 0, noChange: 1 },
+      notes: '',
+    });
+
+    const res = await request(app).post(`/api/reconciliation/${doc.id}/unapprove`);
+
+    expect(res.status).toBe(200);
+    const records = await ApprovalRecord.find({ reconciliationMonthId: doc.id }).sort({ createdAt: 1 });
+    expect(records).toHaveLength(2);
+    expect(records[0].action).toBe('approved');
+    expect(records[1].action).toBe('unapproved');
   });
 });

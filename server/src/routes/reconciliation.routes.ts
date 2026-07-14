@@ -59,6 +59,23 @@ function isApproved(status: string): boolean {
   return status === 'approved';
 }
 
+function buildApprovalSnapshot(doc: InstanceType<typeof ReconciliationMonth>) {
+  const totalBilled = doc.invoices.reduce((s, inv) => s + inv.amountBilled, 0);
+  const totalActual = doc.invoices.reduce((s, inv) => s + inv.actualAmount, 0);
+  const totalDelta = Math.round((totalActual - totalBilled) * 100) / 100;
+
+  return {
+    totalBilled: Math.round(totalBilled * 100) / 100,
+    totalActual: Math.round(totalActual * 100) / 100,
+    totalDelta,
+    actionsRequired: {
+      additionalCharges: doc.invoices.filter((i) => i.action === 'additional_charge').length,
+      creditMemos: doc.invoices.filter((i) => i.action === 'credit_memo').length,
+      noChange: doc.invoices.filter((i) => i.action === 'no_change').length,
+    },
+  };
+}
+
 // ─── POST /api/reconciliation/start ──────────────────────────────────────────
 
 router.post(
@@ -200,26 +217,48 @@ router.post(
     await doc.save();
 
     // Build approval record
-    const totalBilled = doc.invoices.reduce((s, inv) => s + inv.amountBilled, 0);
-    const totalActual = doc.invoices.reduce((s, inv) => s + inv.actualAmount, 0);
-    const totalDelta = Math.round((totalActual - totalBilled) * 100) / 100;
+    const snapshot = buildApprovalSnapshot(doc);
 
     const record = await ApprovalRecord.create({
       reconciliationMonthId: doc._id,
+      action: 'approved',
       approvedBy,
       approvedAt,
-      totalBilled: Math.round(totalBilled * 100) / 100,
-      totalActual: Math.round(totalActual * 100) / 100,
-      totalDelta,
-      actionsRequired: {
-        additionalCharges: doc.invoices.filter((i) => i.action === 'additional_charge').length,
-        creditMemos: doc.invoices.filter((i) => i.action === 'credit_memo').length,
-        noChange: doc.invoices.filter((i) => i.action === 'no_change').length,
-      },
+      ...snapshot,
       notes: notes ?? '',
     });
 
     res.status(201).json({ success: true, data: { approval: record } });
+  }),
+);
+
+// ─── POST /api/reconciliation/:id/unapprove ──────────────────────────────────
+
+router.post(
+  '/:id/unapprove',
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const doc = await ReconciliationMonth.findById(req.params.id);
+    if (!doc) throw createError('Reconciliation not found', 404);
+    if (!isApproved(doc.status)) throw createError('Reconciliation is not approved', 409);
+
+    doc.status = 'in_progress';
+    doc.approvedBy = undefined;
+    doc.approvedAt = undefined;
+    await doc.save();
+
+    const performedBy = `${req.user!.firstName} ${req.user!.lastName}`;
+    const snapshot = buildApprovalSnapshot(doc);
+
+    await ApprovalRecord.create({
+      reconciliationMonthId: doc._id,
+      action: 'unapproved',
+      approvedBy: performedBy,
+      approvedAt: new Date(),
+      ...snapshot,
+      notes: '',
+    });
+
+    res.json({ success: true, data: { reconciliation: doc } });
   }),
 );
 
