@@ -28,6 +28,9 @@ export function Reconciliation() {
   const [expandedInvoiceNo, setExpandedInvoiceNo] = useState<string | null>(null);
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [expandedPractitioners, setExpandedPractitioners] = useState<Set<string>>(new Set());
+  const [qboClientOptions, setQboClientOptions] = useState<string[]>([]);
+  const [qboServiceOptions, setQboServiceOptions] = useState<string[]>([]);
+  const [qboOptionsError, setQboOptionsError] = useState('');
 
   useEffect(() => {
     if (!id) return;
@@ -44,6 +47,33 @@ export function Reconciliation() {
       .catch(() => setPullError('Failed to load reconciliation. It may have been deleted.'))
       .finally(() => setLoadingExisting(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!manualModalOpen || !reconciliation) return;
+    setQboOptionsError('');
+
+    axios.get<{ success: boolean; data: { customers: string[] } }>(
+      `/api/qbo/customers/${reconciliation.company}`,
+      { withCredentials: true },
+    )
+      .then(({ data }) => setQboClientOptions(data.data.customers))
+      .catch((err: unknown) => {
+        setQboClientOptions([]);
+        const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
+        setQboOptionsError(String(msg ?? 'Failed to load QBO customers — you can still type a name manually.'));
+      });
+
+    axios.get<{ success: boolean; data: { items: string[] } }>(
+      `/api/qbo/items/${reconciliation.company}`,
+      { withCredentials: true },
+    )
+      .then(({ data }) => setQboServiceOptions(data.data.items))
+      .catch((err: unknown) => {
+        setQboServiceOptions([]);
+        const msg = axios.isAxiosError(err) ? err.response?.data?.error : null;
+        setQboOptionsError(String(msg ?? 'Failed to load QBO services — you can still type a value manually.'));
+      });
+  }, [manualModalOpen, reconciliation]);
 
   function handleFormChange(field: 'month' | 'year' | 'company', value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -293,6 +323,9 @@ export function Reconciliation() {
             <AddManualInvoiceModal
               reconciliationId={reconciliation._id}
               practitionerOptions={practitionerOptions}
+              clientOptions={qboClientOptions}
+              serviceOptions={qboServiceOptions}
+              qboOptionsError={qboOptionsError}
               onClose={() => setManualModalOpen(false)}
               onCreated={refreshReconciliation}
             />

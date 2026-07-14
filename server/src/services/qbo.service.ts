@@ -2,7 +2,7 @@ import axios from 'axios';
 import { env } from '../config/env';
 import { IQBOTokenDocument } from '../models/QBOToken.model';
 import { oauthService } from './oauth.service';
-import { QBOInvoice, QBOQueryResponse, QBOCompanyInfo, InvoiceRow } from '../types';
+import { QBOInvoice, QBOQueryResponse, QBOCompanyInfo, QBOCustomer, QBOItem, InvoiceRow } from '../types';
 
 const QBO_BASE_URLS = {
   sandbox: 'https://sandbox-quickbooks.api.intuit.com',
@@ -54,7 +54,15 @@ class QBOService {
       return http.get<T>(url);
     };
 
-    const accessToken = await oauthService.getValidAccessToken(tokenDoc);
+    let accessToken: string;
+    try {
+      accessToken = await oauthService.getValidAccessToken(tokenDoc);
+    } catch (err) {
+      console.error(`[QBO] token refresh failed for ${tokenDoc.company}:`, err);
+      throw new Error(
+        `QBO token for "${tokenDoc.company}" is invalid — disconnect and reconnect in Settings.`,
+      );
+    }
 
     console.log(`[QBO] GET ${url.replace(/access_token=[^&]+/, 'access_token=***')}`);
     console.log(`[QBO] company=${tokenDoc.company} realmId=${tokenDoc.companyId} env=${tokenDoc.environment}`);
@@ -133,6 +141,28 @@ class QBOService {
     const invoices = (data.QueryResponse['Invoice'] as QBOInvoice[]) ?? [];
 
     return invoices[0] ? this.normalizeInvoice(invoices[0]) : null;
+  }
+
+  // ─── Fetch customers / service items for typeahead fields ────────────────────
+
+  async fetchCustomerNames(tokenDoc: IQBOTokenDocument): Promise<string[]> {
+    const query = "SELECT * FROM Customer WHERE Active = true MAXRESULTS 1000";
+    const url = this.buildQueryUrl(tokenDoc.companyId, this.baseUrl(tokenDoc), query);
+
+    const data = await this.qboGet<QBOQueryResponse<QBOCustomer>>(tokenDoc, url);
+    const customers = (data.QueryResponse['Customer'] as QBOCustomer[]) ?? [];
+
+    return [...new Set(customers.map((c) => c.DisplayName).filter(Boolean))].sort();
+  }
+
+  async fetchServiceItemNames(tokenDoc: IQBOTokenDocument): Promise<string[]> {
+    const query = "SELECT * FROM Item WHERE Active = true AND Type = 'Service' MAXRESULTS 1000";
+    const url = this.buildQueryUrl(tokenDoc.companyId, this.baseUrl(tokenDoc), query);
+
+    const data = await this.qboGet<QBOQueryResponse<QBOItem>>(tokenDoc, url);
+    const items = (data.QueryResponse['Item'] as QBOItem[]) ?? [];
+
+    return [...new Set(items.map((i) => i.Name).filter(Boolean))].sort();
   }
 
   // ─── Normalize QBO Invoice → InvoiceRow ──────────────────────────────────────

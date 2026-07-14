@@ -60,6 +60,19 @@ export interface QBOCompanyInfo {
   Country: string;
 }
 
+export interface QBOCustomer {
+  Id: string;
+  DisplayName: string;
+  Active: boolean;
+}
+
+export interface QBOItem {
+  Id: string;
+  Name: string;
+  Active: boolean;
+  Type: string;
+}
+
 // ─── Evoke Sync domain types ──────────────────────────────────────────────────
 
 export type Company = 'york_region' | 'consulting';
