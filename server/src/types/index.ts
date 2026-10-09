@@ -89,6 +89,15 @@ export interface SessionGroup {
 
 export interface InvoiceRow {
   invoiceNo: string;
+  /**
+   * Unique key for this row within a reconciliation. Equals `invoiceNo` for
+   * single-line and manual invoices, `${invoiceNo}:${lineId}` for each sales
+   * line of a multi-line QBO invoice. Rows persisted before this field existed
+   * have it undefined — always resolve via `getRowKey()`.
+   */
+  rowKey?: string;
+  /** QBO Line.Id this row was built from (multi-line invoices only). */
+  lineId?: string;
   clientName: string;
   practitioner: string;
   serviceType: string;

@@ -56,6 +56,25 @@ describe('PATCH /api/reconciliation/:id/invoice/:invoiceNo', () => {
     expect(res.body.data.invoice.sessionGroups[0].qboDescription).toContain('New Person');
   });
 
+  it('targets a multi-line row by its composite rowKey', async () => {
+    const doc = await makeReconciliation([
+      makeInvoice({ invoiceNo: '1', rowKey: '1:1', lineId: '1', rate: 100 }),
+      makeInvoice({ invoiceNo: '1', rowKey: '1:2', lineId: '2', rate: 50 }),
+    ]);
+
+    const res = await request(app)
+      .patch(`/api/reconciliation/${doc.id}/invoice/${encodeURIComponent('1:2')}`)
+      .send({ rate: 75 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.invoice.rowKey).toBe('1:2');
+    expect(res.body.data.invoice.rate).toBe(75);
+
+    const reloaded = await ReconciliationMonth.findById(doc.id);
+    expect(reloaded!.invoices[0].rate).toBe(100);
+    expect(reloaded!.invoices[1].rate).toBe(75);
+  });
+
   it('applies rate override and recomputes actualAmount', async () => {
     const doc = await makeReconciliation([
       makeInvoice({
@@ -144,7 +163,7 @@ describe('POST /api/reconciliation/:id/invoice/:invoiceNo/refetch', () => {
       makeInvoice({ invoiceNo: '1001', clientName: 'Old', rate: 80, amountBilled: 400 }),
     ]);
 
-    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue(
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue([
       makeInvoice({
         invoiceNo: '1001',
         clientName: 'New',
@@ -152,7 +171,7 @@ describe('POST /api/reconciliation/:id/invoice/:invoiceNo/refetch', () => {
         amountBilled: 500,
         description: 'fresh',
       }),
-    );
+    ]);
 
     const res = await request(app)
       .post(`/api/reconciliation/${doc.id}/invoice/1001/refetch`);
@@ -182,7 +201,7 @@ describe('POST /api/reconciliation/:id/invoice/:invoiceNo/refetch', () => {
       makeInvoice({ invoiceNo: '999' }),
     ]);
 
-    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue(null);
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue([]);
 
     const res = await request(app)
       .post(`/api/reconciliation/${doc.id}/invoice/999/refetch`);

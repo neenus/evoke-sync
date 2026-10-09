@@ -16,7 +16,11 @@ const MINOR_VERSION = env.QBO_MINOR_VERSION;
 const PRACTITIONER_REGEX = /with ([A-Z][a-zA-Z\-]+(?: [A-Z][a-zA-Z\-]+)+) for the month/i;
 const INSURANCE_REGEX = /Insurance re[ck]ip[ie]t|Insurance receipt/i;
 
-function detectServiceType(description: string): string {
+/**
+ * Keyword fallback used only when a QBO line carries no service item name.
+ * Order matters (from build plan).
+ */
+export function detectServiceType(description: string): string {
   if (/Reading/i.test(description)) return 'Reading Remediation';
   if (/Math Recovery/i.test(description)) return 'Math Remediation';
   if (/Math/i.test(description)) return 'Math Remediation';
@@ -25,9 +29,98 @@ function detectServiceType(description: string): string {
   return 'Academic Strategies';
 }
 
+/**
+ * The QBO service item on the line is the source of truth for service type
+ * (e.g. "Social Work", "Speech Language Assessment"). Sub-items come back as
+ * "Parent:Child" — keep the leaf. Only fall back to keyword detection on the
+ * description text when the line has no item name at all.
+ */
+export function resolveServiceType(itemName: string | undefined, text: string): string {
+  const leaf = (itemName ?? '').split(':').pop()?.trim() ?? '';
+  return leaf || detectServiceType(text);
+}
+
 function extractPractitioner(description: string): string {
   const match = PRACTITIONER_REGEX.exec(description);
   return match ? match[1] : 'Unknown';
+}
+
+/** Resolve the unique row key, tolerating rows persisted before `rowKey` existed. */
+export function getRowKey(row: Pick<InvoiceRow, 'invoiceNo' | 'rowKey'>): string {
+  return row.rowKey || row.invoiceNo;
+}
+
+function baseRow(inv: QBOInvoice, text: string): Omit<InvoiceRow, 'serviceType' | 'hoursBilled' | 'rate' | 'amountBilled'> {
+  return {
+    invoiceNo: inv.DocNumber,
+    rowKey: inv.DocNumber,
+    clientName: inv.CustomerRef.name ?? inv.CustomerRef.value,
+    practitioner: extractPractitioner(text),
+    isInsurance: INSURANCE_REGEX.test(text),
+    actualHours: 0,
+    actualAmount: 0,
+    delta: 0,
+    action: 'awaiting_data',
+    sessionGroups: [],
+    parseWarnings: [],
+    notes: '',
+    excluded: false,
+    description: text,
+    isManual: false,
+    practitionerOverridden: false,
+  };
+}
+
+/**
+ * Normalize one QBO invoice into reconciliation rows — one row per sales line.
+ *
+ * A single-line invoice yields one row keyed by its DocNumber (unchanged
+ * behaviour, amountBilled = TotalAmt). A multi-line invoice yields one row per
+ * SalesItemLineDetail line, each keyed `${DocNumber}:${Line.Id}` with its own
+ * service type, practitioner, qty, rate and line amount. Subtotal/discount
+ * lines are skipped; description-only lines contribute text to every row.
+ */
+export function normalizeQBOInvoice(inv: QBOInvoice): InvoiceRow[] {
+  const memo = inv.CustomerMemo?.value?.trim() ?? '';
+  const lines = inv.Line ?? [];
+  const salesLines = lines.filter((l) => l.SalesItemLineDetail);
+  const sharedText = lines
+    .filter((l) => !l.SalesItemLineDetail)
+    .map((l) => (l.Description ?? '').trim())
+    .filter(Boolean);
+
+  const textFor = (lineDescs: string[]) =>
+    [memo, ...sharedText, ...lineDescs].filter(Boolean).join('\n');
+
+  if (salesLines.length <= 1) {
+    const allLineDescs = lines.map((l) => (l.Description ?? '').trim()).filter(Boolean);
+    const text = [memo, ...allLineDescs].filter(Boolean).join('\n');
+    const mainLine = salesLines[0];
+    return [
+      {
+        ...baseRow(inv, text),
+        lineId: mainLine?.Id,
+        serviceType: resolveServiceType(mainLine?.SalesItemLineDetail?.ItemRef?.name, text),
+        hoursBilled: mainLine?.SalesItemLineDetail?.Qty ?? 0,
+        rate: mainLine?.SalesItemLineDetail?.UnitPrice ?? 0,
+        amountBilled: inv.TotalAmt,
+      },
+    ];
+  }
+
+  return salesLines.map((line, idx) => {
+    const lineId = line.Id ?? String(idx + 1);
+    const text = textFor([(line.Description ?? '').trim()]);
+    return {
+      ...baseRow(inv, text),
+      rowKey: `${inv.DocNumber}:${lineId}`,
+      lineId,
+      serviceType: resolveServiceType(line.SalesItemLineDetail?.ItemRef?.name, text),
+      hoursBilled: line.SalesItemLineDetail?.Qty ?? 0,
+      rate: line.SalesItemLineDetail?.UnitPrice ?? 0,
+      amountBilled: line.Amount,
+    };
+  });
 }
 
 // ─── QBOService ───────────────────────────────────────────────────────────────
@@ -127,20 +220,21 @@ class QBOService {
     const data = await this.qboGet<QBOQueryResponse<QBOInvoice>>(tokenDoc, url);
     const invoices = (data.QueryResponse['Invoice'] as QBOInvoice[]) ?? [];
 
-    return invoices.map((inv) => this.normalizeInvoice(inv));
+    return invoices.flatMap((inv) => normalizeQBOInvoice(inv));
   }
 
+  /** All reconciliation rows for one QBO invoice (one per sales line); empty if not found. */
   async fetchInvoiceByNumber(
     tokenDoc: IQBOTokenDocument,
     invoiceNo: string,
-  ): Promise<InvoiceRow | null> {
+  ): Promise<InvoiceRow[]> {
     const query = `SELECT * FROM Invoice WHERE DocNumber = '${invoiceNo}'`;
     const url = this.buildQueryUrl(tokenDoc.companyId, this.baseUrl(tokenDoc), query);
 
     const data = await this.qboGet<QBOQueryResponse<QBOInvoice>>(tokenDoc, url);
     const invoices = (data.QueryResponse['Invoice'] as QBOInvoice[]) ?? [];
 
-    return invoices[0] ? this.normalizeInvoice(invoices[0]) : null;
+    return invoices[0] ? normalizeQBOInvoice(invoices[0]) : [];
   }
 
   // ─── Fetch customers / service items for typeahead fields ────────────────────
@@ -163,42 +257,6 @@ class QBOService {
     const items = (data.QueryResponse['Item'] as QBOItem[]) ?? [];
 
     return [...new Set(items.map((i) => i.Name).filter(Boolean))].sort();
-  }
-
-  // ─── Normalize QBO Invoice → InvoiceRow ──────────────────────────────────────
-
-  private normalizeInvoice(inv: QBOInvoice): InvoiceRow {
-    const memo = inv.CustomerMemo?.value?.trim() ?? '';
-    const lineDescs = inv.Line.map((l) => (l.Description ?? '').trim()).filter(Boolean);
-    const description = [memo, ...lineDescs].filter(Boolean).join('\n');
-    const allText = description;
-
-    const mainLine = inv.Line.find((l) => l.Amount > 0 && l.SalesItemLineDetail);
-    const rate = mainLine?.SalesItemLineDetail?.UnitPrice ?? 0;
-    const hoursBilled = mainLine?.SalesItemLineDetail?.Qty ?? 0;
-    const amountBilled = inv.TotalAmt;
-
-    return {
-      invoiceNo: inv.DocNumber,
-      clientName: inv.CustomerRef.name ?? inv.CustomerRef.value,
-      practitioner: extractPractitioner(allText),
-      serviceType: detectServiceType(allText),
-      hoursBilled,
-      rate,
-      amountBilled,
-      isInsurance: INSURANCE_REGEX.test(allText),
-      actualHours: 0,
-      actualAmount: 0,
-      delta: 0,
-      action: 'awaiting_data',
-      sessionGroups: [],
-      parseWarnings: [],
-      notes: '',
-      excluded: false,
-      description,
-      isManual: false,
-      practitionerOverridden: false,
-    };
   }
 }
 

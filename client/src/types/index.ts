@@ -29,6 +29,9 @@ export interface SessionGroup {
 
 export interface InvoiceRow {
   invoiceNo: string;
+  /** Unique row key; equals invoiceNo unless the QBO invoice has multiple lines. */
+  rowKey?: string;
+  lineId?: string;
   clientName: string;
   practitioner: string;
   serviceType: string;

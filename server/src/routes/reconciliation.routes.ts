@@ -9,8 +9,7 @@ import { qboService } from '../services/qbo.service';
 import {
   recalcInvoice,
   createManualInvoice,
-  refetchInvoiceFromQBO,
-} from '../services/reconciliation.service';
+  refetchInvoiceFromQBO, getRowKey } from '../services/reconciliation.service';
 import { ApprovalRecord } from '../models/ApprovalRecord.model';
 import { generateReconciliationExcel } from '../services/excelExport.service';
 import { env } from '../config/env';
@@ -262,17 +261,17 @@ router.post(
   }),
 );
 
-// ─── POST /api/reconciliation/:id/invoice/:invoiceNo/refetch ─────────────────
+// ─── POST /api/reconciliation/:id/invoice/:rowKey/refetch ─────────────────
 
 router.post(
-  '/:id/invoice/:invoiceNo/refetch',
+  '/:id/invoice/:rowKey/refetch',
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const doc = await ReconciliationMonth.findById(req.params.id);
     if (!doc) throw createError('Reconciliation not found', 404);
     if (isApproved(doc.status)) throw createError('Approved reconciliations are locked', 403);
 
-    const invoice = doc.invoices.find((inv) => inv.invoiceNo === req.params.invoiceNo);
-    if (!invoice) throw createError(`Invoice ${req.params.invoiceNo} not found`, 404);
+    const invoice = doc.invoices.find((inv) => getRowKey(inv) === req.params.rowKey);
+    if (!invoice) throw createError(`Invoice ${req.params.rowKey} not found`, 404);
     if (invoice.isManual) throw createError('Cannot refetch a manual invoice from QBO', 400);
 
     const tokenDoc = await QBOToken.findByCompany(doc.company as Company);
@@ -280,17 +279,17 @@ router.post(
       throw createError(`QBO not connected for ${doc.company} — connect it in Settings`, 400);
     }
 
-    const updated = await refetchInvoiceFromQBO(doc, req.params.invoiceNo, tokenDoc, env.DEFAULT_SUPERVISOR);
+    const updated = await refetchInvoiceFromQBO(doc, req.params.rowKey, tokenDoc, env.DEFAULT_SUPERVISOR);
     await doc.save();
 
     res.json({ success: true, data: { invoice: updated } });
   }),
 );
 
-// ─── PATCH /api/reconciliation/:id/invoice/:invoiceNo ─────────────────────────
+// ─── PATCH /api/reconciliation/:id/invoice/:rowKey ─────────────────────────
 
 router.patch(
-  '/:id/invoice/:invoiceNo',
+  '/:id/invoice/:rowKey',
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const doc = await ReconciliationMonth.findById(req.params.id);
     if (!doc) throw createError('Reconciliation not found', 404);
@@ -299,8 +298,8 @@ router.patch(
     const result = invoiceUpdateSchema.safeParse(req.body);
     if (!result.success) throw createError(result.error.errors[0].message, 400);
 
-    const invoice = doc.invoices.find((inv) => inv.invoiceNo === req.params.invoiceNo);
-    if (!invoice) throw createError(`Invoice ${req.params.invoiceNo} not found`, 404);
+    const invoice = doc.invoices.find((inv) => getRowKey(inv) === req.params.rowKey);
+    if (!invoice) throw createError(`Invoice ${req.params.rowKey} not found`, 404);
 
     const { sessionGroups, notes, practitioner, rate } = result.data;
 
@@ -320,17 +319,17 @@ router.patch(
   }),
 );
 
-// ─── PATCH /api/reconciliation/:id/invoice/:invoiceNo/exclude ────────────────
+// ─── PATCH /api/reconciliation/:id/invoice/:rowKey/exclude ────────────────
 
 router.patch(
-  '/:id/invoice/:invoiceNo/exclude',
+  '/:id/invoice/:rowKey/exclude',
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const doc = await ReconciliationMonth.findById(req.params.id);
     if (!doc) throw createError('Reconciliation not found', 404);
     if (isApproved(doc.status)) throw createError('Approved reconciliations are locked', 403);
 
-    const invoice = doc.invoices.find((inv) => inv.invoiceNo === req.params.invoiceNo);
-    if (!invoice) throw createError(`Invoice ${req.params.invoiceNo} not found`, 404);
+    const invoice = doc.invoices.find((inv) => getRowKey(inv) === req.params.rowKey);
+    if (!invoice) throw createError(`Invoice ${req.params.rowKey} not found`, 404);
 
     invoice.excluded = Boolean(req.body.excluded);
     await doc.save();
@@ -339,17 +338,17 @@ router.patch(
   }),
 );
 
-// ─── DELETE /api/reconciliation/:id/invoice/:invoiceNo (manual only) ─────────
+// ─── DELETE /api/reconciliation/:id/invoice/:rowKey (manual only) ─────────
 
 router.delete(
-  '/:id/invoice/:invoiceNo',
+  '/:id/invoice/:rowKey',
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const doc = await ReconciliationMonth.findById(req.params.id);
     if (!doc) throw createError('Reconciliation not found', 404);
     if (isApproved(doc.status)) throw createError('Approved reconciliations are locked', 403);
 
-    const idx = doc.invoices.findIndex((inv) => inv.invoiceNo === req.params.invoiceNo);
-    if (idx === -1) throw createError(`Invoice ${req.params.invoiceNo} not found`, 404);
+    const idx = doc.invoices.findIndex((inv) => getRowKey(inv) === req.params.rowKey);
+    if (idx === -1) throw createError(`Invoice ${req.params.rowKey} not found`, 404);
     if (!doc.invoices[idx].isManual) {
       throw createError('Only manual invoices can be deleted; QBO invoices can be excluded', 400);
     }

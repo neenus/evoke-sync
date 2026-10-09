@@ -44,10 +44,11 @@ router.get(
     if (!isValidCompany(company)) throw createError('Invalid company', 400);
 
     const tokenDoc = await getTokenOrThrow(company);
-    const invoice = await qboService.fetchInvoiceByNumber(tokenDoc, invoiceNo);
+    const rows = await qboService.fetchInvoiceByNumber(tokenDoc, invoiceNo);
 
-    if (!invoice) throw createError(`Invoice ${invoiceNo} not found`, 404);
-    res.json({ success: true, data: { invoice } });
+    if (rows.length === 0) throw createError(`Invoice ${invoiceNo} not found`, 404);
+    // One row per sales line; `invoice` kept for backward compatibility.
+    res.json({ success: true, data: { invoice: rows[0], invoices: rows } });
   }),
 );
 

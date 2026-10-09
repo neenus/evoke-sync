@@ -48,6 +48,8 @@ const sessionGroupSchema = new Schema<ISessionGroup>(
 const invoiceRowSchema = new Schema<IInvoiceRow>(
   {
     invoiceNo: { type: String, required: true },
+    rowKey: { type: String },
+    lineId: { type: String },
     clientName: { type: String, required: true, trim: true },
     practitioner: { type: String, required: true, trim: true },
     serviceType: { type: String, required: true },

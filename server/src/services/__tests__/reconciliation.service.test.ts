@@ -176,7 +176,7 @@ describe('refetchInvoiceFromQBO', () => {
       }),
     ]);
 
-    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue(
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue([
       makeInvoice({
         invoiceNo: '1001',
         clientName: 'New',
@@ -188,7 +188,7 @@ describe('refetchInvoiceFromQBO', () => {
         isInsurance: true,
         description: 'fresh QBO desc',
       }),
-    );
+    ]);
 
     const updated = await refetchInvoiceFromQBO(doc, '1001', fakeTokenDoc, 'Test Supervisor');
 
@@ -210,9 +210,9 @@ describe('refetchInvoiceFromQBO', () => {
       }),
     ]);
 
-    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue(
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue([
       makeInvoice({ invoiceNo: '1002', practitioner: 'QBO Detected' }),
-    );
+    ]);
 
     const updated = await refetchInvoiceFromQBO(doc, '1002', fakeTokenDoc, 'X');
     expect(updated.practitioner).toBe('Manual Override');
@@ -229,9 +229,9 @@ describe('refetchInvoiceFromQBO', () => {
       }),
     ]);
 
-    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue(
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue([
       makeInvoice({ invoiceNo: '1003', practitioner: 'Fresh' }),
-    );
+    ]);
 
     const updated = await refetchInvoiceFromQBO(doc, '1003', fakeTokenDoc, 'X');
     expect(updated.practitioner).toBe('Fresh');
@@ -241,11 +241,45 @@ describe('refetchInvoiceFromQBO', () => {
   it('marks excluded with parseWarning when QBO returns null', async () => {
     const doc = await makeReconciliation([makeInvoice({ invoiceNo: '1004' })]);
 
-    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue(null);
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue([]);
 
     const updated = await refetchInvoiceFromQBO(doc, '1004', fakeTokenDoc, 'X');
     expect(updated.excluded).toBe(true);
     expect(updated.parseWarnings.some((w) => w.includes('not found in QBO'))).toBe(true);
+    vi.restoreAllMocks();
+  });
+
+  it('refetches the matching line of a multi-line invoice by rowKey', async () => {
+    const doc = await makeReconciliation([
+      makeInvoice({ invoiceNo: '2001', rowKey: '2001:1', lineId: '1', serviceType: 'Social Work', rate: 100 }),
+      makeInvoice({ invoiceNo: '2001', rowKey: '2001:2', lineId: '2', serviceType: 'Reading Remediation', rate: 90 }),
+    ]);
+
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue([
+      makeInvoice({ invoiceNo: '2001', rowKey: '2001:1', lineId: '1', serviceType: 'Social Work', rate: 110 }),
+      makeInvoice({ invoiceNo: '2001', rowKey: '2001:2', lineId: '2', serviceType: 'Reading Remediation', rate: 95 }),
+    ]);
+
+    const updated = await refetchInvoiceFromQBO(doc, '2001:2', fakeTokenDoc, 'X');
+    expect(updated.rate).toBe(95);
+    expect(updated.serviceType).toBe('Reading Remediation');
+    expect(doc.invoices[0].rate).toBe(100);
+    vi.restoreAllMocks();
+  });
+
+  it('excludes a row whose line no longer exists on a multi-line invoice', async () => {
+    const doc = await makeReconciliation([
+      makeInvoice({ invoiceNo: '2002', rowKey: '2002:3', lineId: '3' }),
+    ]);
+
+    vi.spyOn(qboService, 'fetchInvoiceByNumber').mockResolvedValue([
+      makeInvoice({ invoiceNo: '2002', rowKey: '2002:1', lineId: '1' }),
+      makeInvoice({ invoiceNo: '2002', rowKey: '2002:2', lineId: '2' }),
+    ]);
+
+    const updated = await refetchInvoiceFromQBO(doc, '2002:3', fakeTokenDoc, 'X');
+    expect(updated.excluded).toBe(true);
+    expect(updated.parseWarnings.some((w) => w.includes('line 3'))).toBe(true);
     vi.restoreAllMocks();
   });
 

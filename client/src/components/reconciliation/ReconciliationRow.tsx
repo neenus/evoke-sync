@@ -4,6 +4,7 @@ import { InvoiceRow, SessionGroup } from '../../types';
 import { formatCAD, formatDelta } from '../../utils/formatters';
 import { SearchableSelect } from '../shared/SearchableSelect';
 import { ConfirmModal } from '../shared/ConfirmModal';
+import { rowKeyParam } from '../../utils/invoiceRow';
 
 interface Props {
   invoice: InvoiceRow;
@@ -57,7 +58,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
     const next = !excluded;
     try {
       const { data } = await axios.patch<{ success: boolean; data: { invoice: InvoiceRow } }>(
-        `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}/exclude`,
+        `/api/reconciliation/${reconciliationId}/invoice/${rowKeyParam(invoice)}/exclude`,
         { excluded: next },
         { withCredentials: true },
       );
@@ -74,7 +75,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
       setSaving(true);
       try {
         const { data } = await axios.patch<{ success: boolean; data: { invoice: InvoiceRow } }>(
-          `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}`,
+          `/api/reconciliation/${reconciliationId}/invoice/${rowKeyParam(invoice)}`,
           patch,
           { withCredentials: true },
         );
@@ -85,7 +86,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
         setSaving(false);
       }
     },
-    [reconciliationId, invoice.invoiceNo, readOnly, onUpdate],
+    [reconciliationId, invoice.rowKey, invoice.invoiceNo, readOnly, onUpdate],
   );
 
   const save = useCallback(
@@ -94,7 +95,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
       setSaving(true);
       try {
         const { data } = await axios.patch<{ success: boolean; data: { invoice: InvoiceRow } }>(
-          `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}`,
+          `/api/reconciliation/${reconciliationId}/invoice/${rowKeyParam(invoice)}`,
           { sessionGroups: groups },
           { withCredentials: true },
         );
@@ -107,7 +108,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
         setSaving(false);
       }
     },
-    [reconciliationId, invoice.invoiceNo, readOnly, onUpdate],
+    [reconciliationId, invoice.rowKey, invoice.invoiceNo, readOnly, onUpdate],
   );
 
   function updateGroup(idx: number, field: keyof SessionGroup, value: unknown) {
@@ -151,7 +152,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
         setActionError('');
         try {
           await axios.post(
-            `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}/refetch`,
+            `/api/reconciliation/${reconciliationId}/invoice/${rowKeyParam(invoice)}/refetch`,
             {},
             { withCredentials: true },
           );
@@ -174,7 +175,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
         setActionError('');
         try {
           await axios.delete(
-            `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}`,
+            `/api/reconciliation/${reconciliationId}/invoice/${rowKeyParam(invoice)}`,
             { withCredentials: true },
           );
           onRefresh();
@@ -265,6 +266,9 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
                 <strong className="text-gray-800">
                   {invoice.isManual ? <em className="text-gray-400 font-normal">(create in QBO)</em> : invoice.invoiceNo}
                 </strong>
+                {!invoice.isManual && invoice.lineId && invoice.rowKey !== invoice.invoiceNo && (
+                  <span className="ml-1 text-gray-400">(line {invoice.lineId})</span>
+                )}
               </div>
               <div>Rate <strong className="text-gray-800">{formatCAD(invoice.rate)}/hr</strong></div>
               <div>Billed <strong className="text-gray-800">{formatCAD(invoice.amountBilled)}</strong></div>
