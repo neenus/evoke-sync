@@ -75,6 +75,19 @@ describe('PATCH /api/reconciliation/:id/invoice/:invoiceNo', () => {
     expect(reloaded!.invoices[1].rate).toBe(75);
   });
 
+  it('marks an invoice as no sessions and credits the full amount', async () => {
+    const doc = await makeReconciliation([makeInvoice({ invoiceNo: '7', amountBilled: 300 })]);
+
+    const res = await request(app)
+      .patch(`/api/reconciliation/${doc.id}/invoice/7`)
+      .send({ noSessions: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.invoice.noSessions).toBe(true);
+    expect(res.body.data.invoice.delta).toBe(-300);
+    expect(res.body.data.invoice.action).toBe('credit_memo');
+  });
+
   it('applies rate override and recomputes actualAmount', async () => {
     const doc = await makeReconciliation([
       makeInvoice({

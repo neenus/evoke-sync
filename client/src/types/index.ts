@@ -47,6 +47,7 @@ export interface InvoiceRow {
   parseWarnings: string[];
   notes: string;
   excluded: boolean;
+  noSessions?: boolean;
   description: string;
   isManual: boolean;
   practitionerOverridden: boolean;

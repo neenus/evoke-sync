@@ -69,6 +69,7 @@ const invoiceRowSchema = new Schema<IInvoiceRow>(
     parseWarnings: [{ type: String }],
     notes: { type: String, default: '' },
     excluded: { type: Boolean, default: false },
+    noSessions: { type: Boolean, default: false },
     description: { type: String, default: '' },
     isManual: { type: Boolean, default: false },
     practitionerOverridden: { type: Boolean, default: false },

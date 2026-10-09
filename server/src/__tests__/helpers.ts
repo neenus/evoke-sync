@@ -20,6 +20,7 @@ export function makeInvoice(overrides: Partial<InvoiceRow> = {}): InvoiceRow {
     parseWarnings: [],
     notes: '',
     excluded: false,
+    noSessions: false,
     description: '',
     isManual: false,
     practitionerOverridden: false,

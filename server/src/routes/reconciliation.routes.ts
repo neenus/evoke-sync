@@ -44,6 +44,7 @@ const invoiceUpdateSchema = z.object({
   notes: z.string().optional(),
   practitioner: z.string().min(1).optional(),
   rate: z.number().positive().optional(),
+  noSessions: z.boolean().optional(),
 });
 
 const manualInvoiceSchema = z.object({
@@ -301,7 +302,7 @@ router.patch(
     const invoice = doc.invoices.find((inv) => getRowKey(inv) === req.params.rowKey);
     if (!invoice) throw createError(`Invoice ${req.params.rowKey} not found`, 404);
 
-    const { sessionGroups, notes, practitioner, rate } = result.data;
+    const { sessionGroups, notes, practitioner, rate, noSessions } = result.data;
 
     if (notes !== undefined) invoice.notes = notes;
 
@@ -310,6 +311,7 @@ router.patch(
       sessionGroups: sessionGroups as SessionGroup[] | undefined,
       practitioner,
       rate,
+      noSessions,
       supervisorDetails: env.DEFAULT_SUPERVISOR,
       month: doc.month,
     });

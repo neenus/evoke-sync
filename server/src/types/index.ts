@@ -113,6 +113,8 @@ export interface InvoiceRow {
   parseWarnings: string[];
   notes: string;
   excluded: boolean;
+  /** No sessions took place this month: actual = 0 and the full billed amount becomes a credit. */
+  noSessions: boolean;
   description: string;
   isManual: boolean;
   practitionerOverridden: boolean;

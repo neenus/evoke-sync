@@ -11,12 +11,13 @@ export interface RecalcInput {
   sessionGroups?: SessionGroup[];
   practitioner?: string;
   rate?: number;
+  noSessions?: boolean;
   supervisorDetails: string;
   month: string;
 }
 
 export function recalcInvoice(input: RecalcInput): void {
-  const { invoice, sessionGroups, practitioner, rate, supervisorDetails, month } = input;
+  const { invoice, sessionGroups, practitioner, rate, noSessions, supervisorDetails, month } = input;
 
   if (practitioner !== undefined) {
     invoice.practitioner = practitioner;
@@ -25,6 +26,10 @@ export function recalcInvoice(input: RecalcInput): void {
 
   if (rate !== undefined) {
     invoice.rate = rate;
+  }
+
+  if (noSessions !== undefined) {
+    invoice.noSessions = noSessions;
   }
 
   if (sessionGroups !== undefined) {
@@ -53,6 +58,18 @@ export function recalcInvoice(input: RecalcInput): void {
   }, 0);
 
   invoice.actualHours = Math.round(actualHours * 100) / 100;
+
+  // Applying real session hours supersedes a "no sessions" flag.
+  if (invoice.actualHours > 0) invoice.noSessions = false;
+
+  if (invoice.noSessions) {
+    // Client was invoiced but no sessions took place: credit the full amount.
+    invoice.actualAmount = 0;
+    invoice.delta = Math.round(-invoice.amountBilled * 100) / 100;
+    invoice.action = invoice.delta < 0 ? 'credit_memo' : 'no_change';
+    return;
+  }
+
   invoice.actualAmount = Math.round(invoice.actualHours * invoice.rate * 100) / 100;
   invoice.delta = Math.round((invoice.actualAmount - invoice.amountBilled) * 100) / 100;
 
@@ -96,6 +113,7 @@ export function createManualInvoice(input: ManualInvoiceInput): InvoiceRow {
     parseWarnings: [],
     notes: '',
     excluded: false,
+    noSessions: false,
     description: '',
     isManual: true,
     practitionerOverridden: false,

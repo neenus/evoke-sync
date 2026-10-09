@@ -65,6 +65,7 @@ function baseRow(inv: QBOInvoice, text: string): Omit<InvoiceRow, 'serviceType' 
     parseWarnings: [],
     notes: '',
     excluded: false,
+    noSessions: false,
     description: text,
     isManual: false,
     practitionerOverridden: false,

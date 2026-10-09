@@ -70,7 +70,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
   }
 
   const savePartial = useCallback(
-    async (patch: Partial<{ practitioner: string; rate: number; notes: string; sessionGroups: SessionGroup[] }>) => {
+    async (patch: Partial<{ practitioner: string; rate: number; notes: string; sessionGroups: SessionGroup[]; noSessions: boolean }>) => {
       if (readOnly) return;
       setSaving(true);
       try {
@@ -223,6 +223,11 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
             <span className="text-gray-500 text-xs">{invoice.serviceType}</span>
             <span className="text-gray-600">
               {invoice.hoursBilled}h → {invoice.actualHours}h
+              {invoice.noSessions && (
+                <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-semibold align-middle">
+                  No sessions
+                </span>
+              )}
             </span>
             <span className={`font-medium ${excluded ? 'text-gray-400' : deltaStyle}`}>
               {excluded ? '—' : formatDelta(invoice.delta)}
@@ -317,6 +322,23 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
                 <p className="text-xs text-gray-700 whitespace-pre-line">{invoice.description}</p>
               </div>
             )}
+
+            <label className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${invoice.noSessions ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
+              <input
+                type="checkbox"
+                checked={Boolean(invoice.noSessions)}
+                disabled={readOnly}
+                onChange={(e) => savePartial({ noSessions: e.target.checked })}
+                className="mt-0.5 accent-red-600"
+              />
+              <span>
+                <span className="font-medium text-gray-800">No sessions took place this month</span>
+                <span className="block text-xs text-gray-500">
+                  Actual hours stay at 0 and the full billed amount ({formatCAD(invoice.amountBilled)}) is treated as a credit memo.
+                  Adding session dates below clears this.
+                </span>
+              </span>
+            </label>
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">

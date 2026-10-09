@@ -55,6 +55,41 @@ describe('recalcInvoice', () => {
     expect(invoice.sessionGroups[0].qboDescription).toContain('April');
   });
 
+  it('noSessions credits the full billed amount and leaves awaiting_data', () => {
+    const invoice = asMutableInvoice();
+    invoice.amountBilled = 450;
+    invoice.sessionGroups = [] as unknown as IInvoiceRow['sessionGroups'];
+
+    recalcInvoice({ invoice, noSessions: true, supervisorDetails: 'X', month: 'April' });
+
+    expect(invoice.noSessions).toBe(true);
+    expect(invoice.actualHours).toBe(0);
+    expect(invoice.actualAmount).toBe(0);
+    expect(invoice.delta).toBe(-450);
+    expect(invoice.action).toBe('credit_memo');
+
+    recalcInvoice({ invoice, noSessions: false, supervisorDetails: 'X', month: 'April' });
+    expect(invoice.action).toBe('awaiting_data');
+  });
+
+  it('applying real session hours clears noSessions', () => {
+    const invoice = asMutableInvoice();
+    invoice.amountBilled = 100;
+    invoice.rate = 100;
+    invoice.noSessions = true;
+
+    recalcInvoice({
+      invoice,
+      sessionGroups: [{ sessionLength: 60, sessionDates: ['3'], qboDescription: '' }],
+      supervisorDetails: 'X',
+      month: 'April',
+    });
+
+    expect(invoice.noSessions).toBe(false);
+    expect(invoice.actualHours).toBe(1);
+    expect(invoice.action).toBe('no_change');
+  });
+
   it('preserves existing values when no overrides are passed', () => {
     const invoice = asMutableInvoice();
     invoice.rate = 150;
