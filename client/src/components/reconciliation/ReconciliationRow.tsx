@@ -341,7 +341,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
                         }}
                         className="w-full mt-1 border border-gray-300 rounded px-2 py-1 text-sm disabled:bg-gray-100"
                       >
-                        {[15, 30, 40, 45, 60, 90, 120].map((min) => (
+                        {[10, 15, 30, 40, 45, 60, 90, 120].map((min) => (
                           <option key={min} value={min}>{min} min</option>
                         ))}
                       </select>
