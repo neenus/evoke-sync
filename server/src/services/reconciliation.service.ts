@@ -1,7 +1,9 @@
 import { IInvoiceRow, ISessionGroup, IReconciliationMonthDocument } from '../models/ReconciliationMonth.model';
 import { InvoiceAction, InvoiceRow, SessionGroup } from '../types';
 import { generateDescription } from './descriptionGenerator.service';
-import { qboService } from './qbo.service';
+import { qboService, getRowKey } from './qbo.service';
+
+export { getRowKey };
 import { IQBOTokenDocument } from '../models/QBOToken.model';
 
 export interface RecalcInput {
@@ -9,12 +11,13 @@ export interface RecalcInput {
   sessionGroups?: SessionGroup[];
   practitioner?: string;
   rate?: number;
+  noSessions?: boolean;
   supervisorDetails: string;
   month: string;
 }
 
 export function recalcInvoice(input: RecalcInput): void {
-  const { invoice, sessionGroups, practitioner, rate, supervisorDetails, month } = input;
+  const { invoice, sessionGroups, practitioner, rate, noSessions, supervisorDetails, month } = input;
 
   if (practitioner !== undefined) {
     invoice.practitioner = practitioner;
@@ -23,6 +26,10 @@ export function recalcInvoice(input: RecalcInput): void {
 
   if (rate !== undefined) {
     invoice.rate = rate;
+  }
+
+  if (noSessions !== undefined) {
+    invoice.noSessions = noSessions;
   }
 
   if (sessionGroups !== undefined) {
@@ -51,6 +58,18 @@ export function recalcInvoice(input: RecalcInput): void {
   }, 0);
 
   invoice.actualHours = Math.round(actualHours * 100) / 100;
+
+  // Applying real session hours supersedes a "no sessions" flag.
+  if (invoice.actualHours > 0) invoice.noSessions = false;
+
+  if (invoice.noSessions) {
+    // Client was invoiced but no sessions took place: credit the full amount.
+    invoice.actualAmount = 0;
+    invoice.delta = Math.round(-invoice.amountBilled * 100) / 100;
+    invoice.action = invoice.delta < 0 ? 'credit_memo' : 'no_change';
+    return;
+  }
+
   invoice.actualAmount = Math.round(invoice.actualHours * invoice.rate * 100) / 100;
   invoice.delta = Math.round((invoice.actualAmount - invoice.amountBilled) * 100) / 100;
 
@@ -75,8 +94,10 @@ export interface ManualInvoiceInput {
 }
 
 export function createManualInvoice(input: ManualInvoiceInput): InvoiceRow {
+  const invoiceNo = `MANUAL-${Date.now()}`;
   return {
-    invoiceNo: `MANUAL-${Date.now()}`,
+    invoiceNo,
+    rowKey: invoiceNo,
     clientName: input.clientName.trim(),
     practitioner: input.practitioner.trim(),
     serviceType: input.serviceType,
@@ -92,6 +113,7 @@ export function createManualInvoice(input: ManualInvoiceInput): InvoiceRow {
     parseWarnings: [],
     notes: '',
     excluded: false,
+    noSessions: false,
     description: '',
     isManual: true,
     practitionerOverridden: false,
@@ -100,24 +122,41 @@ export function createManualInvoice(input: ManualInvoiceInput): InvoiceRow {
 
 export async function refetchInvoiceFromQBO(
   doc: IReconciliationMonthDocument,
-  invoiceNo: string,
+  rowKey: string,
   tokenDoc: IQBOTokenDocument,
   supervisorDetails: string,
 ): Promise<IInvoiceRow> {
-  const existing = doc.invoices.find((inv) => inv.invoiceNo === invoiceNo);
-  if (!existing) throw new Error(`Invoice ${invoiceNo} not found in reconciliation`);
+  const existing = doc.invoices.find((inv) => getRowKey(inv) === rowKey);
+  if (!existing) throw new Error(`Invoice ${rowKey} not found in reconciliation`);
   if (existing.isManual) throw new Error('Cannot refetch a manual invoice from QBO');
 
-  const fresh = await qboService.fetchInvoiceByNumber(tokenDoc, invoiceNo);
+  const today = new Date().toISOString().slice(0, 10);
+  const freshRows = await qboService.fetchInvoiceByNumber(tokenDoc, existing.invoiceNo);
 
-  if (!fresh) {
+  if (freshRows.length === 0) {
     existing.excluded = true;
     existing.parseWarnings.push(
-      `Invoice ${invoiceNo} not found in QBO on ${new Date().toISOString().slice(0, 10)} — auto-excluded`,
+      `Invoice ${existing.invoiceNo} not found in QBO on ${today} — auto-excluded`,
     );
     return existing;
   }
 
+  // Match this row's line; a legacy single row still matches a single-line invoice.
+  const fresh =
+    freshRows.find((r) => getRowKey(r) === getRowKey(existing)) ??
+    (freshRows.length === 1 ? freshRows[0] : undefined);
+
+  if (!fresh) {
+    existing.excluded = true;
+    existing.parseWarnings.push(
+      `Invoice ${existing.invoiceNo} line ${existing.lineId ?? '?'} not found in QBO on ${today} ` +
+        `(invoice now has ${freshRows.length} lines) — auto-excluded; start a new pull to import all lines`,
+    );
+    return existing;
+  }
+
+  existing.rowKey = fresh.rowKey;
+  existing.lineId = fresh.lineId;
   existing.clientName = fresh.clientName;
   existing.serviceType = fresh.serviceType;
   existing.hoursBilled = fresh.hoursBilled;

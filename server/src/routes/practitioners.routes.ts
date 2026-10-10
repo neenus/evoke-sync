@@ -5,7 +5,7 @@ import { asyncHandler } from '../middleware/async.middleware';
 import { createError } from '../middleware/error.middleware';
 import { requireAuth } from '../middleware/auth.middleware';
 import { parsePractitionerInvoice } from '../services/practitionerParser.service';
-import { recalcInvoice } from '../services/reconciliation.service';
+import { recalcInvoice, getRowKey } from '../services/reconciliation.service';
 import { PractitionerInvoice } from '../models/PractitionerInvoice.model';
 import { ReconciliationMonth } from '../models/ReconciliationMonth.model';
 import { AuthenticatedRequest } from '../types';
@@ -30,6 +30,8 @@ const upload = multer({
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
 export interface ProposedMatch {
+  /** Unique row key (equals invoiceNo unless the QBO invoice has multiple lines). */
+  rowKey: string;
   invoiceNo: string;
   qboClientName: string;
   parsedClientName: string;
@@ -60,7 +62,7 @@ function fuzzyNameMatch(a: string, b: string): boolean {
 function buildProposedMatches(
   practitionerName: string,
   parsedSessions: { clientName: string; sessionLength: number; sessionDate: string; billable: boolean }[],
-  invoices: { invoiceNo: string; clientName: string; practitioner: string }[],
+  invoices: { rowKey: string; invoiceNo: string; clientName: string; practitioner: string }[],
 ): { matches: ProposedMatch[]; unmatched: UnmatchedGroup[] } {
   const billable = parsedSessions.filter((s) => s.billable && s.sessionLength > 0);
 
@@ -102,6 +104,7 @@ function buildProposedMatches(
 
     if (sessionGroups.length > 0) {
       matches.push({
+        rowKey: invoice.rowKey,
         invoiceNo: invoice.invoiceNo,
         qboClientName: invoice.clientName,
         parsedClientName: grouped.keys().next().value?.split('|')[0] ?? invoice.clientName,
@@ -185,6 +188,7 @@ router.post(
         practitionerName,
         parsedSessions,
         reconciliation.invoices.map((inv) => ({
+          rowKey: getRowKey(inv),
           invoiceNo: inv.invoiceNo,
           clientName: inv.clientName,
           practitioner: inv.practitioner,
@@ -211,6 +215,7 @@ router.post(
 const applySchema = z.object({
   applications: z.array(
     z.object({
+      rowKey: z.string().min(1).optional(),
       invoiceNo: z.string().min(1),
       sessionGroups: z.array(
         z.object({
@@ -244,7 +249,8 @@ router.post(
     const updatedInvoiceNos: string[] = [];
 
     for (const app of applications) {
-      const invoice = reconciliation.invoices.find((inv) => inv.invoiceNo === app.invoiceNo);
+      const key = app.rowKey ?? app.invoiceNo;
+      const invoice = reconciliation.invoices.find((inv) => getRowKey(inv) === key);
       if (!invoice) continue;
 
       recalcInvoice({
@@ -254,7 +260,7 @@ router.post(
         month: reconciliation.month,
       });
 
-      updatedInvoiceNos.push(app.invoiceNo);
+      updatedInvoiceNos.push(key);
     }
 
     await reconciliation.save();

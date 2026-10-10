@@ -1,5 +1,6 @@
 import { InvoiceRow } from '../../types';
 import { formatCAD, formatDelta, actionLabel } from '../../utils/formatters';
+import { getRowKey } from '../../utils/invoiceRow';
 
 interface Props {
   invoices: InvoiceRow[];
@@ -62,7 +63,7 @@ export function SummaryPanel({ invoices }: Props) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {invoices.map((inv) => (
-              <tr key={inv.invoiceNo} className="hover:bg-gray-50">
+              <tr key={getRowKey(inv)} className="hover:bg-gray-50">
                 <td className="px-3 py-2 font-medium">{inv.practitioner}</td>
                 <td className="px-3 py-2">{inv.clientName}</td>
                 <td className="px-3 py-2">{formatCAD(inv.amountBilled)}</td>

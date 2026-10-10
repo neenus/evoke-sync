@@ -4,6 +4,7 @@ import { InvoiceRow, SessionGroup } from '../../types';
 import { formatCAD, formatDelta } from '../../utils/formatters';
 import { SearchableSelect } from '../shared/SearchableSelect';
 import { ConfirmModal } from '../shared/ConfirmModal';
+import { rowKeyParam } from '../../utils/invoiceRow';
 
 interface Props {
   invoice: InvoiceRow;
@@ -57,7 +58,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
     const next = !excluded;
     try {
       const { data } = await axios.patch<{ success: boolean; data: { invoice: InvoiceRow } }>(
-        `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}/exclude`,
+        `/api/reconciliation/${reconciliationId}/invoice/${rowKeyParam(invoice)}/exclude`,
         { excluded: next },
         { withCredentials: true },
       );
@@ -69,12 +70,12 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
   }
 
   const savePartial = useCallback(
-    async (patch: Partial<{ practitioner: string; rate: number; notes: string; sessionGroups: SessionGroup[] }>) => {
+    async (patch: Partial<{ practitioner: string; rate: number; notes: string; sessionGroups: SessionGroup[]; noSessions: boolean }>) => {
       if (readOnly) return;
       setSaving(true);
       try {
         const { data } = await axios.patch<{ success: boolean; data: { invoice: InvoiceRow } }>(
-          `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}`,
+          `/api/reconciliation/${reconciliationId}/invoice/${rowKeyParam(invoice)}`,
           patch,
           { withCredentials: true },
         );
@@ -85,7 +86,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
         setSaving(false);
       }
     },
-    [reconciliationId, invoice.invoiceNo, readOnly, onUpdate],
+    [reconciliationId, invoice.rowKey, invoice.invoiceNo, readOnly, onUpdate],
   );
 
   const save = useCallback(
@@ -94,7 +95,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
       setSaving(true);
       try {
         const { data } = await axios.patch<{ success: boolean; data: { invoice: InvoiceRow } }>(
-          `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}`,
+          `/api/reconciliation/${reconciliationId}/invoice/${rowKeyParam(invoice)}`,
           { sessionGroups: groups },
           { withCredentials: true },
         );
@@ -107,7 +108,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
         setSaving(false);
       }
     },
-    [reconciliationId, invoice.invoiceNo, readOnly, onUpdate],
+    [reconciliationId, invoice.rowKey, invoice.invoiceNo, readOnly, onUpdate],
   );
 
   function updateGroup(idx: number, field: keyof SessionGroup, value: unknown) {
@@ -151,7 +152,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
         setActionError('');
         try {
           await axios.post(
-            `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}/refetch`,
+            `/api/reconciliation/${reconciliationId}/invoice/${rowKeyParam(invoice)}/refetch`,
             {},
             { withCredentials: true },
           );
@@ -174,7 +175,7 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
         setActionError('');
         try {
           await axios.delete(
-            `/api/reconciliation/${reconciliationId}/invoice/${invoice.invoiceNo}`,
+            `/api/reconciliation/${reconciliationId}/invoice/${rowKeyParam(invoice)}`,
             { withCredentials: true },
           );
           onRefresh();
@@ -222,6 +223,11 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
             <span className="text-gray-500 text-xs">{invoice.serviceType}</span>
             <span className="text-gray-600">
               {invoice.hoursBilled}h → {invoice.actualHours}h
+              {invoice.noSessions && (
+                <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-semibold align-middle">
+                  No sessions
+                </span>
+              )}
             </span>
             <span className={`font-medium ${excluded ? 'text-gray-400' : deltaStyle}`}>
               {excluded ? '—' : formatDelta(invoice.delta)}
@@ -265,6 +271,9 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
                 <strong className="text-gray-800">
                   {invoice.isManual ? <em className="text-gray-400 font-normal">(create in QBO)</em> : invoice.invoiceNo}
                 </strong>
+                {!invoice.isManual && invoice.lineId && invoice.rowKey !== invoice.invoiceNo && (
+                  <span className="ml-1 text-gray-400">(line {invoice.lineId})</span>
+                )}
               </div>
               <div>Rate <strong className="text-gray-800">{formatCAD(invoice.rate)}/hr</strong></div>
               <div>Billed <strong className="text-gray-800">{formatCAD(invoice.amountBilled)}</strong></div>
@@ -313,6 +322,23 @@ export function ReconciliationRow({ invoice, reconciliationId, readOnly, expande
                 <p className="text-xs text-gray-700 whitespace-pre-line">{invoice.description}</p>
               </div>
             )}
+
+            <label className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${invoice.noSessions ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
+              <input
+                type="checkbox"
+                checked={Boolean(invoice.noSessions)}
+                disabled={readOnly}
+                onChange={(e) => savePartial({ noSessions: e.target.checked })}
+                className="mt-0.5 accent-red-600"
+              />
+              <span>
+                <span className="font-medium text-gray-800">No sessions took place this month</span>
+                <span className="block text-xs text-gray-500">
+                  Actual hours stay at 0 and the full billed amount ({formatCAD(invoice.amountBilled)}) is treated as a credit memo.
+                  Adding session dates below clears this.
+                </span>
+              </span>
+            </label>
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">

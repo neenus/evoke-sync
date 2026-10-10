@@ -11,6 +11,7 @@ import { ApprovalBlock } from '../components/reconciliation/ApprovalBlock';
 import { AddManualInvoiceModal } from '../components/reconciliation/AddManualInvoiceModal';
 import { ReconciliationStats } from '../components/reconciliation/ReconciliationStats';
 import { ReconciliationMonth, InvoiceRow } from '../types';
+import { getRowKey } from '../utils/invoiceRow';
 
 const STEPS = ['Setup', 'Billing Notes', 'Upload', 'Reconcile', 'Approve'];
 
@@ -127,7 +128,7 @@ export function Reconciliation() {
       return {
         ...prev,
         invoices: prev.invoices.map((inv) =>
-          inv.invoiceNo === updated.invoiceNo ? updated : inv,
+          getRowKey(inv) === getRowKey(updated) ? updated : inv,
         ),
       };
     });
@@ -302,12 +303,12 @@ export function Reconciliation() {
                   <div className="p-4 space-y-2">
                     {invoices.map((inv) => (
                       <ReconciliationRow
-                        key={inv.invoiceNo}
+                        key={getRowKey(inv)}
                         invoice={inv}
                         reconciliationId={reconciliation._id}
                         readOnly={isApproved}
-                        expanded={expandedInvoiceNo === inv.invoiceNo}
-                        onToggle={() => setExpandedInvoiceNo((prev) => (prev === inv.invoiceNo ? null : inv.invoiceNo))}
+                        expanded={expandedInvoiceNo === getRowKey(inv)}
+                        onToggle={() => setExpandedInvoiceNo((prev) => (prev === getRowKey(inv) ? null : getRowKey(inv)))}
                         practitionerOptions={practitionerOptions}
                         onUpdate={handleInvoiceUpdate}
                         onRefresh={refreshReconciliation}

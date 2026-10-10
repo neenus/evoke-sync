@@ -8,6 +8,7 @@ interface SessionGroup {
 }
 
 interface ProposedMatch {
+  rowKey: string;
   invoiceNo: string;
   qboClientName: string;
   parsedClientName: string;
@@ -39,7 +40,7 @@ type Stage = 'idle' | 'parsing' | 'reviewing' | 'applying' | 'done';
 export function PractitionerUpload({ reconciliationMonthId, onUploaded }: Props) {
   const [stage, setStage] = useState<Stage>('idle');
   const [previews, setPreviews] = useState<PreviewResult[]>([]);
-  // Set of "invoiceNo" strings that the user has checked ON (confirmed)
+  // Set of row keys that the user has checked ON (confirmed)
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
   const [expandedWarnings, setExpandedWarnings] = useState<Set<string>>(new Set());
   const [applyError, setApplyError] = useState('');
@@ -61,7 +62,7 @@ export function PractitionerUpload({ reconciliationMonthId, onUploaded }: Props)
 
       // Pre-check all matched invoices so user sees what will happen by default
       const allMatched = new Set<string>(
-        results.flatMap((r) => r.matches.map((m) => m.invoiceNo)),
+        results.flatMap((r) => r.matches.map((m) => m.rowKey)),
       );
 
       setPreviews((prev) => {
@@ -81,10 +82,10 @@ export function PractitionerUpload({ reconciliationMonthId, onUploaded }: Props)
     }
   }
 
-  function toggleConfirmed(invoiceNo: string) {
+  function toggleConfirmed(rowKey: string) {
     setConfirmed((prev) => {
       const next = new Set(prev);
-      next.has(invoiceNo) ? next.delete(invoiceNo) : next.add(invoiceNo);
+      next.has(rowKey) ? next.delete(rowKey) : next.add(rowKey);
       return next;
     });
   }
@@ -100,8 +101,8 @@ export function PractitionerUpload({ reconciliationMonthId, onUploaded }: Props)
   async function handleApply() {
     const applications = previews
       .flatMap((r) => r.matches)
-      .filter((m) => confirmed.has(m.invoiceNo))
-      .map((m) => ({ invoiceNo: m.invoiceNo, sessionGroups: m.sessionGroups }));
+      .filter((m) => confirmed.has(m.rowKey))
+      .map((m) => ({ rowKey: m.rowKey, invoiceNo: m.invoiceNo, sessionGroups: m.sessionGroups }));
 
     if (applications.length === 0) {
       setApplyError('No matches selected — check at least one invoice to apply.');
@@ -130,7 +131,7 @@ export function PractitionerUpload({ reconciliationMonthId, onUploaded }: Props)
     setApplyError('');
   }
 
-  const totalConfirmed = previews.flatMap((r) => r.matches).filter((m) => confirmed.has(m.invoiceNo)).length;
+  const totalConfirmed = previews.flatMap((r) => r.matches).filter((m) => confirmed.has(m.rowKey)).length;
   const totalMatches = previews.flatMap((r) => r.matches).length;
   const totalUnmatched = previews.flatMap((r) => r.unmatched).length;
 
@@ -208,7 +209,7 @@ export function PractitionerUpload({ reconciliationMonthId, onUploaded }: Props)
               {preview.matches.length > 0 && (
                 <div className="divide-y divide-gray-50">
                   {preview.matches.map((match) => {
-                    const isChecked = confirmed.has(match.invoiceNo);
+                    const isChecked = confirmed.has(match.rowKey);
                     const namesDiffer = match.parsedClientName.toLowerCase().replace(/\s+/g, '') !==
                       match.qboClientName.toLowerCase().replace(/\s+/g, '');
                     const totalSessions = match.sessionGroups.reduce(
@@ -217,7 +218,7 @@ export function PractitionerUpload({ reconciliationMonthId, onUploaded }: Props)
 
                     return (
                       <label
-                        key={match.invoiceNo}
+                        key={match.rowKey}
                         className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors ${
                           isChecked ? 'bg-white hover:bg-gray-50' : 'bg-gray-50 opacity-60 hover:opacity-80'
                         }`}
@@ -225,7 +226,7 @@ export function PractitionerUpload({ reconciliationMonthId, onUploaded }: Props)
                         <input
                           type="checkbox"
                           checked={isChecked}
-                          onChange={() => toggleConfirmed(match.invoiceNo)}
+                          onChange={() => toggleConfirmed(match.rowKey)}
                           className="mt-0.5 accent-blue-600"
                         />
                         <div className="flex-1 min-w-0">
